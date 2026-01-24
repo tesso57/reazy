@@ -1,9 +1,11 @@
+// Package sidebar provides the sidebar component.
 package sidebar
 
 import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Props defines the properties for the sidebar component.
 type Props struct {
 	View   string
 	Width  int
@@ -11,6 +13,7 @@ type Props struct {
 	Active bool
 }
 
+// Render renders the sidebar component.
 func Render(p Props) string {
 	sidebarStyle := lipgloss.NewStyle().
 		Width(p.Width).

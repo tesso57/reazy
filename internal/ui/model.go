@@ -32,8 +32,10 @@ const (
 	addingFeedView
 )
 
+// AllFeedsURL is the special URL for the "All Feeds" view.
 const AllFeedsURL = "internal://all"
 
+// Model represents the main application state.
 type Model struct {
 	cfg         *config.Config
 	state       sessionState
@@ -51,9 +53,10 @@ type Model struct {
 	err         error
 
 	historyMgr *history.Manager
-	history    map[string]*history.HistoryItem // GUID -> Item
+	history    map[string]*history.Item // GUID -> Item
 }
 
+// KeyMap defines the keybindings for the application.
 type KeyMap struct {
 	Up         key.Binding
 	Down       key.Binding
@@ -72,10 +75,12 @@ type KeyMap struct {
 	Help       key.Binding
 }
 
+// ShortHelp returns a subset of keybindings for the help view.
 func (k *KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.Help, k.Quit, k.Back, k.Open}
 }
 
+// FullHelp returns all keybindings for the help view.
 func (k *KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Left, k.Right},
@@ -85,6 +90,7 @@ func (k *KeyMap) FullHelp() [][]key.Binding {
 	}
 }
 
+// NewKeyMap creates a new KeyMap from the configuration.
 func NewKeyMap(cfg config.KeyMapConfig) KeyMap {
 	return KeyMap{
 		Up: key.NewBinding(
@@ -150,6 +156,7 @@ func NewKeyMap(cfg config.KeyMapConfig) KeyMap {
 	}
 }
 
+// NewModel creates a new application model.
 func NewModel(cfg *config.Config) *Model {
 	l := list.New([]list.Item{}, delegate.NewFeedDelegate(lipgloss.Color(cfg.Theme.FeedName)), 0, 0)
 	l.Title = "Reazy Feeds"
@@ -183,7 +190,7 @@ func NewModel(cfg *config.Config) *Model {
 	hm := history.NewManager(cfg.HistoryFile)
 	hist, _ := hm.Load() // Ignore error on startup, just start fresh if fail
 	if hist == nil {
-		hist = make(map[string]*history.HistoryItem)
+		hist = make(map[string]*history.Item)
 	}
 
 	m := &Model{
@@ -262,10 +269,12 @@ func fetchFeedCmd(url string, allFeeds []string) tea.Cmd {
 	}
 }
 
+// Init initializes the model.
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, textinput.Blink)
 }
 
+// Update handles messages and updates the model state.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -400,7 +409,7 @@ func (m *Model) handleArticleViewKeys(msg tea.KeyMsg) (tea.Cmd, bool) {
 			// Mark as Read
 			if _, ok := m.history[i.guid]; ok {
 				m.history[i.guid].IsRead = true
-				var snapshot []*history.HistoryItem
+				var snapshot []*history.Item
 				for _, v := range m.history {
 					snapshot = append(snapshot, v)
 				}
@@ -437,6 +446,7 @@ func (m *Model) handleArticleViewKeys(msg tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
+//nolint:unparam
 func (m *Model) handleDetailViewKeys(msg tea.KeyMsg) (tea.Cmd, bool) {
 	if key.Matches(msg, m.keys.Left) || key.Matches(msg, m.keys.Back) {
 		m.state = articleView
@@ -472,7 +482,7 @@ func (m *Model) handleFeedFetchedMsg(msg feedFetchedMsg) {
 			}
 
 			if _, exists := m.history[guid]; !exists {
-				m.history[guid] = &history.HistoryItem{
+				m.history[guid] = &history.Item{
 					GUID:        guid,
 					Title:       it.Title,
 					Description: it.Description,
@@ -485,17 +495,15 @@ func (m *Model) handleFeedFetchedMsg(msg feedFetchedMsg) {
 					IsRead:      false,
 					SavedAt:     time.Now(),
 				}
-			} else {
+			} else if m.history[guid].FeedURL == "" {
 				// Update FeedURL if missing (migration)
-				if m.history[guid].FeedURL == "" {
-					m.history[guid].FeedURL = it.FeedURL
-				}
+				m.history[guid].FeedURL = it.FeedURL
 			}
 		}
 
 		// 2. Save History
 		// Convert map to slice for saving
-		var allHistory []*history.HistoryItem
+		var allHistory []*history.Item
 		for _, v := range m.history {
 			allHistory = append(allHistory, v)
 		}
@@ -503,14 +511,12 @@ func (m *Model) handleFeedFetchedMsg(msg feedFetchedMsg) {
 		go func() { _ = m.historyMgr.Save(allHistory) }()
 
 		// 3. Prepare Display Items
-		var displayItems []*history.HistoryItem
+		var displayItems []*history.Item
 		for _, hItem := range m.history {
 			if m.currentFeed.URL == AllFeedsURL {
 				displayItems = append(displayItems, hItem)
-			} else {
-				if hItem.FeedURL == m.currentFeed.URL {
-					displayItems = append(displayItems, hItem)
-				}
+			} else if hItem.FeedURL == m.currentFeed.URL {
+				displayItems = append(displayItems, hItem)
 			}
 		}
 
@@ -550,6 +556,7 @@ func (m *Model) handleFeedFetchedMsg(msg feedFetchedMsg) {
 	}
 }
 
+// View renders the application view.
 func (m *Model) View() string {
 	return view.Render(m.buildProps())
 }
@@ -571,7 +578,7 @@ var OSOpenCmd = func(url string) *exec.Cmd {
 	default:
 		return nil
 	}
-	return exec.Command(cmd, args...)
+	return exec.Command(cmd, args...) //nolint:gosec
 }
 
 func openBrowser(url string) error {

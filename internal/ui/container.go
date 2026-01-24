@@ -1,3 +1,4 @@
+// Package ui provides the main user interface model and view components.
 package ui
 
 import (
@@ -55,13 +56,14 @@ func (m *Model) buildHeaderProps() header.Props {
 
 func (m *Model) buildMainProps() main_view.Props {
 	var body string
-	if m.loading {
+	switch {
+	case m.loading:
 		body = fmt.Sprintf("\n\n   %s Loading feed...", m.spinner.View())
-	} else if m.state == detailView {
+	case m.state == detailView:
 		body = m.viewport.View()
-	} else if m.state == articleView {
+	case m.state == articleView:
 		body = m.articleList.View()
-	} else {
+	default:
 		body = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")).
 			Render("\n\n  ← Select a feed from the left list.")

@@ -23,7 +23,7 @@ func TestHistoryManager(t *testing.T) {
 
 	// Test Save
 	now := time.Now()
-	testItems := []*HistoryItem{
+	testItems := []*Item{
 		{
 			GUID:    "id1",
 			Title:   "Title 1",

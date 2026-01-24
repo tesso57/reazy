@@ -9,17 +9,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// FeedItem interface for items that can be rendered by FeedDelegate.
 type FeedItem interface {
 	list.Item
 	Title() string
 	URL() string
 }
 
+// FeedDelegate handles rendering of feed items.
 type FeedDelegate struct {
 	Styles list.DefaultItemStyles
 	Theme  lipgloss.Color
 }
 
+// NewFeedDelegate creates a new FeedDelegate.
 func NewFeedDelegate(themeColor lipgloss.Color) *FeedDelegate {
 	return &FeedDelegate{
 		Styles: list.NewDefaultItemStyles(),
@@ -27,18 +30,22 @@ func NewFeedDelegate(themeColor lipgloss.Color) *FeedDelegate {
 	}
 }
 
+// Height returns the height of the item.
 func (d FeedDelegate) Height() int {
 	return 1
 }
 
+// Spacing returns the spacing between items.
 func (d FeedDelegate) Spacing() int {
 	return 0
 }
 
-func (d FeedDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+// Update handles messages for the delegate.
+func (d FeedDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd {
 	return nil
 }
 
+// Render renders the item.
 func (d FeedDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	i, ok := item.(FeedItem)
 	if !ok {

@@ -1,3 +1,4 @@
+// Package history manages persistent storage of feed item states.
 package history
 
 import (
@@ -8,9 +9,9 @@ import (
 	"time"
 )
 
-// HistoryItem represents an item in the history/cache.
+// Item represents an item in the history/cache.
 // It mirrors feed.Item but adds tracking fields.
-type HistoryItem struct {
+type Item struct {
 	GUID        string    `json:"guid"` // Unique ID (Link or GUID)
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
@@ -38,12 +39,12 @@ func NewManager(path string) *Manager {
 	}
 }
 
-// Load reads the JSONL file and returns a map of GUID -> HistoryItem.
-func (m *Manager) Load() (map[string]*HistoryItem, error) {
+// Load reads the JSONL file and returns a map of GUID -> Item.
+func (m *Manager) Load() (map[string]*Item, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	items := make(map[string]*HistoryItem)
+	items := make(map[string]*Item)
 	f, err := os.Open(m.path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -55,7 +56,7 @@ func (m *Manager) Load() (map[string]*HistoryItem, error) {
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		var item HistoryItem
+		var item Item
 		if err := json.Unmarshal(scanner.Bytes(), &item); err != nil {
 			continue // Skip malformed lines
 		}
@@ -66,7 +67,7 @@ func (m *Manager) Load() (map[string]*HistoryItem, error) {
 }
 
 // Save writes the given items to the JSONL file, overwriting it.
-func (m *Manager) Save(items []*HistoryItem) error {
+func (m *Manager) Save(items []*Item) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -160,7 +160,7 @@ func TestUpdate(t *testing.T) {
 	oldOpen := OSOpenCmd
 	defer func() { OSOpenCmd = oldOpen }()
 
-	OSOpenCmd = func(url string) *exec.Cmd {
+	OSOpenCmd = func(_ string) *exec.Cmd {
 		return exec.Command("echo", "mock open")
 	}
 
@@ -368,7 +368,7 @@ func TestOpenBrowser(t *testing.T) {
 	defer func() { OSOpenCmd = oldOpen }()
 
 	called := false
-	OSOpenCmd = func(url string) *exec.Cmd {
+	OSOpenCmd = func(_ string) *exec.Cmd {
 		called = true
 		return exec.Command("echo", "mock")
 	}
@@ -382,7 +382,7 @@ func TestOpenBrowser(t *testing.T) {
 	}
 
 	// Test unsupported platform (mocking nil return)
-	OSOpenCmd = func(url string) *exec.Cmd {
+	OSOpenCmd = func(_ string) *exec.Cmd {
 		return nil
 	}
 	err = openBrowser("http://example.com")
@@ -398,7 +398,7 @@ func TestHistoryIntegration(t *testing.T) {
 
 	// Pre-populate history
 	hm := history.NewManager(historyPath)
-	preItems := []*history.HistoryItem{
+	preItems := []*history.Item{
 		{
 			GUID:    "merged-link",
 			Title:   "Merged Title",

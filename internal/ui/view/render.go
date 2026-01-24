@@ -1,21 +1,24 @@
+// Package view orchestrates the composition of UI components.
 package view
 
 import (
 	"github.com/tesso57/reazy/internal/ui/components/header"
 	"github.com/tesso57/reazy/internal/ui/components/layout"
-	main_view "github.com/tesso57/reazy/internal/ui/components/main"
+	mainview "github.com/tesso57/reazy/internal/ui/components/main"
 	"github.com/tesso57/reazy/internal/ui/components/modal"
 	"github.com/tesso57/reazy/internal/ui/components/sidebar"
 )
 
+// Props aggregates properties for all UI components.
 type Props struct {
 	Sidebar sidebar.Props
 	Header  header.Props
-	Main    main_view.Props
+	Main    mainview.Props
 	Modal   modal.Props
 	Footer  string
 }
 
+// Render renders the complete UI view based on the provided props.
 func Render(p Props) string {
 	if p.Modal.Visible {
 		return modal.Render(p.Modal)
@@ -25,7 +28,7 @@ func Render(p Props) string {
 	headerStr := header.Render(p.Header)
 
 	p.Main.Header = headerStr
-	mainStr := main_view.Render(p.Main)
+	mainStr := mainview.Render(p.Main)
 
 	layoutProps := layout.Props{
 		Sidebar: sidebarStr,

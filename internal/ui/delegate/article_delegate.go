@@ -1,3 +1,4 @@
+// Package delegate provides custom list item delegates.
 package delegate
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// ArticleItem interface for items that can be rendered by ArticleDelegate.
 type ArticleItem interface {
 	list.Item
 	Title() string
@@ -16,28 +18,34 @@ type ArticleItem interface {
 	FeedTitle() string
 }
 
+// ArticleDelegate handles rendering of article items.
 type ArticleDelegate struct {
 	Styles list.DefaultItemStyles
 }
 
+// NewArticleDelegate creates a new ArticleDelegate.
 func NewArticleDelegate() *ArticleDelegate {
 	return &ArticleDelegate{
 		Styles: list.NewDefaultItemStyles(),
 	}
 }
 
+// Height returns the height of the item.
 func (d *ArticleDelegate) Height() int {
 	return 1
 }
 
+// Spacing returns the spacing between items.
 func (d *ArticleDelegate) Spacing() int {
 	return 0
 }
 
-func (d *ArticleDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+// Update handles messages for the delegate.
+func (d *ArticleDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd {
 	return nil
 }
 
+// Render renders the item.
 func (d *ArticleDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	i, ok := item.(ArticleItem)
 	if !ok {

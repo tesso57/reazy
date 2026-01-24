@@ -1,9 +1,11 @@
-package main_view
+// Package mainview provides the main content area component.
+package mainview
 
 import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Props defines the properties for the main view component.
 type Props struct {
 	Width  int
 	Height int
@@ -11,6 +13,7 @@ type Props struct {
 	Body   string
 }
 
+// Render renders the main view component.
 func Render(p Props) string {
 	mainStyle := lipgloss.NewStyle().
 		Width(p.Width).

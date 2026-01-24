@@ -67,10 +67,55 @@ There are other RSS readers available:
 - [eilmeldung](https://github.com/christo-auer/eilmeldung)
 - [russ](https://github.com/ckampfe/russ)
 
-## Development
-This project uses `xc` for task management.
+## Tasks
 
-- Run: `xc run`
-- Test: `xc test`
-- Coverage: `xc cover`
-- Clean: `xc clean`
+### build
+
+Build the application binary.
+
+```bash
+go build -o reazy ./cmd/reazy
+```
+
+### run
+
+Run the Reazy application.
+
+```bash
+go run ./cmd/reazy
+```
+
+### test
+
+Run all unit tests.
+
+```bash
+go test ./...
+```
+
+### lint
+
+Run static analysis using golangci-lint.
+
+```bash
+golangci-lint run ./...
+```
+
+### cover
+
+Run tests with coverage and open HTML report.
+
+```bash
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+rm coverage.out
+```
+
+### clean
+
+Remove coverage artifacts.
+
+```bash
+go clean
+rm -f coverage.out
+```

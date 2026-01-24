@@ -1,3 +1,4 @@
+// Package feed provides functionality to fetch and parse RSS feeds.
 package feed
 
 import (
@@ -9,6 +10,7 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
+// Item represents a single RSS item.
 type Item struct {
 	Title       string
 	Link        string
@@ -20,13 +22,15 @@ type Item struct {
 	FeedURL     string
 }
 
+// Feed represents a parsed RSS feed.
 type Feed struct {
 	Title string
 	Items []Item
 	URL   string
 }
 
-// ParserFunc is exposed for testing
+// ParserFunc is exposed for testing.
+// It allows mocking the feed parsing logic.
 var ParserFunc = func(url string) (*gofeed.Feed, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -34,6 +38,7 @@ var ParserFunc = func(url string) (*gofeed.Feed, error) {
 	return fp.ParseURLWithContext(url, ctx)
 }
 
+// Fetch parses a feed from the given URL.
 func Fetch(url string) (*Feed, error) {
 	parsed, err := ParserFunc(url)
 	if err != nil {
@@ -73,6 +78,7 @@ func Fetch(url string) (*Feed, error) {
 	return f, nil
 }
 
+// FetchAll parses multiple feeds concurrently and aggregates items.
 func FetchAll(urls []string) (*Feed, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex

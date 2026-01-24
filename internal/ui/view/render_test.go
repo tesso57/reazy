@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/tesso57/reazy/internal/ui/components/header"
-	main_view "github.com/tesso57/reazy/internal/ui/components/main"
+	mainview "github.com/tesso57/reazy/internal/ui/components/main"
 	"github.com/tesso57/reazy/internal/ui/components/modal"
 	"github.com/tesso57/reazy/internal/ui/components/sidebar"
 )
@@ -43,7 +43,7 @@ func TestRender(t *testing.T) {
 					Link:      "LINK",
 					FeedTitle: "FEED",
 				},
-				Main: main_view.Props{
+				Main: mainview.Props{
 					Width:  80,
 					Height: 10,
 					Body:   "MAIN_CONTENT",

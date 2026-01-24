@@ -44,7 +44,7 @@ func TestLoadConfig_Corrupt(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	_ = os.WriteFile(configPath, []byte("invalid_yaml: ["), 0644)
+	_ = os.WriteFile(configPath, []byte("invalid_yaml: ["), 0600)
 
 	_, err = LoadConfig(configPath)
 	if err == nil {

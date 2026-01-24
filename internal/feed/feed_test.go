@@ -43,7 +43,7 @@ func TestFetch(t *testing.T) {
 				{Title: "Item 1", Description: "Desc 1", Content: "Content 1", Link: "http://link1.com", Published: "2023-01-01"},
 			},
 		}
-		ParserFunc = func(url string) (*gofeed.Feed, error) {
+		ParserFunc = func(_ string) (*gofeed.Feed, error) {
 			return mockFeed, nil
 		}
 
@@ -75,7 +75,7 @@ func TestFetch(t *testing.T) {
 				{Title: "Item 1", Link: "http://link1.com", Published: "", Updated: "2023-01-02"},
 			},
 		}
-		ParserFunc = func(url string) (*gofeed.Feed, error) {
+		ParserFunc = func(_ string) (*gofeed.Feed, error) {
 			return mockFeed, nil
 		}
 
@@ -89,7 +89,7 @@ func TestFetch(t *testing.T) {
 	})
 
 	t.Run("Failure", func(t *testing.T) {
-		ParserFunc = func(url string) (*gofeed.Feed, error) {
+		ParserFunc = func(_ string) (*gofeed.Feed, error) {
 			return nil, gofeed.HTTPError{StatusCode: 404, Status: "Not Found"}
 		}
 		_, err := Fetch("http://example.com")

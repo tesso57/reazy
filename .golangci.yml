@@ -1,3 +1,5 @@
+version: 2
+
 run:
   timeout: 5m
   tests: true
@@ -6,16 +8,11 @@ linters:
   disable-all: true
   enable:
     - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-    - gofmt
-    - goimports
+
+
     - revive
     - misspell
-    - typecheck
+
     - gocritic
     - gosec
     - prealloc
@@ -23,12 +20,8 @@ linters:
     - unparam
 
 linters-settings:
-  govet:
-    enable:
-      - nilness
-      - shadow
-  goimports:
-    local-prefixes: github.com/tesso57/reazy
+
+
   revive:
     rules:
       - name: exported

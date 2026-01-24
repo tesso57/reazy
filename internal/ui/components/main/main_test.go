@@ -1,4 +1,4 @@
-package main_view
+package mainview
 
 import (
 	"strings"

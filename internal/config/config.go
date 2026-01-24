@@ -1,3 +1,4 @@
+// Package config handles configuration loading and saving.
 package config
 
 import (
@@ -11,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// KeyMapConfig defines the configuration for keybindings.
 type KeyMapConfig struct {
 	Up         string `yaml:"up" kong:"help='Up key',default='k'"`
 	Down       string `yaml:"down" kong:"help='Down key',default='j'"`
@@ -28,10 +30,12 @@ type KeyMapConfig struct {
 	Refresh    string `yaml:"refresh" kong:"help='Refresh key',default='r'"`
 }
 
+// ThemeConfig defines the color theme configuration.
 type ThemeConfig struct {
 	FeedName string `yaml:"feed_name" kong:"help='Feed name color',default='244'"`
 }
 
+// Config represents the application configuration.
 type Config struct {
 	Feeds       []string     `yaml:"feeds" kong:"help='RSS Feed URLs',default='https://news.ycombinator.com/rss'"`
 	KeyMap      KeyMapConfig `yaml:"keymap" kong:"embed,prefix='keymap.'"`
@@ -42,6 +46,7 @@ type Config struct {
 	configPath string `yaml:"-" kong:"-"`
 }
 
+// LoadConfig loads the configuration from the specified path or default location.
 func LoadConfig(customPath ...string) (*Config, error) {
 	var configPath string
 	if len(customPath) > 0 && customPath[0] != "" {
@@ -55,7 +60,7 @@ func LoadConfig(customPath ...string) (*Config, error) {
 	}
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0750); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -110,7 +115,7 @@ func yamlKongLoader(r io.Reader) (kong.Resolver, error) {
 		return nil, err
 	}
 
-	var f kong.ResolverFunc = func(context *kong.Context, parent *kong.Path, flag *kong.Flag) (interface{}, error) {
+	var f kong.ResolverFunc = func(_ *kong.Context, _ *kong.Path, flag *kong.Flag) (interface{}, error) {
 		// Try various naming conventions
 		names := []string{flag.Name, strings.ReplaceAll(flag.Name, "-", "_")}
 		for _, name := range names {
@@ -143,11 +148,13 @@ func yamlKongLoader(r io.Reader) (kong.Resolver, error) {
 	return f, nil
 }
 
+// AddFeed adds a new feed URL to the configuration and saves it.
 func (c *Config) AddFeed(url string) error {
 	c.Feeds = append(c.Feeds, url)
 	return c.Save()
 }
 
+// RemoveFeed removes a feed by index and saves the configuration.
 func (c *Config) RemoveFeed(index int) error {
 	if index < 0 || index >= len(c.Feeds) {
 		return fmt.Errorf("invalid feed index: %d", index)
@@ -156,6 +163,7 @@ func (c *Config) RemoveFeed(index int) error {
 	return c.Save()
 }
 
+// Save writes the current configuration to the config file.
 func (c *Config) Save() error {
 	f, err := os.Create(c.configPath)
 	if err != nil {

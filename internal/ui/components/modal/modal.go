@@ -1,17 +1,23 @@
+// Package modal provides modal dialog components.
 package modal
 
 import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Kind represents the type of modal.
 type Kind int
 
 const (
+	// None indicates no modal.
 	None Kind = iota
+	// AddFeed shows the add feed dialog.
 	AddFeed
+	// Help shows the help dialog.
 	Help
 )
 
+// Props defines the properties for the modal component.
 type Props struct {
 	Visible bool
 	Kind    Kind
@@ -20,6 +26,7 @@ type Props struct {
 	Height  int
 }
 
+// Render renders the modal component.
 func Render(p Props) string {
 	if !p.Visible {
 		return ""
