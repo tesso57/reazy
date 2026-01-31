@@ -61,7 +61,6 @@ keymap:
   ...
 ```
 
-
 ## Alternatives
 There are other RSS readers available:
 - [eilmeldung](https://github.com/christo-auer/eilmeldung)

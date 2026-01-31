@@ -11,10 +11,26 @@ This document provides context for AI agents working on the Reazy codebase.
 
 ## Project Structure
 - `cmd/reazy`: Entry point (`main.go`).
-- `internal/config`: Configuration management using `kong` and `yaml.v3`.
-- `internal/feed`: RSS parsing logic wrapping `gofeed`.
-- `internal/ui`: Bubble Tea Model and View logic.
+- `internal/domain/reading`: Feed/History domain models.
+- `internal/domain/subscription`: Subscription domain model.
+- `internal/application/settings`: Application settings types (keymap/theme/etc).
+- `internal/application/usecase`: Application services.
+- `internal/infrastructure/config`: Configuration storage using `kong` and `yaml.v3`.
+- `internal/infrastructure/feed`: RSS parsing logic wrapping `gofeed`.
+- `internal/infrastructure/history`: Read-history persistence using JSONL.
+- `internal/presentation/tui`: Bubble Tea Model and View logic.
+- `internal/presentation/tui/state`: UI state types.
+- `internal/presentation/tui/intent`: Input intent parsing.
+- `internal/presentation/tui/update`: State update/reducer logic.
+- `internal/presentation/tui/presenter`: View model builders.
+- `internal/presentation/tui/components`: Header/sidebar/main/modal UI pieces.
+- `internal/presentation/tui/view`: Layout + render orchestration.
+- `internal/presentation/tui/view/list`: List item delegates (feed/article).
+- `docs/architecture.md`: Current architecture overview.
 - `TASKS.md`: Task definitions for `xc`.
+
+## Documentation Notes
+- `README.md` と `README_ja.md` は対外向け資料のため、内部設計・実装事情・アーキテクチャ説明は記載しない。
 
 ## Coding Standards
 - **Architecture**: Follow standard Go project layout.
@@ -23,7 +39,7 @@ This document provides context for AI agents working on the Reazy codebase.
 - **Error Handling**: Propagate errors or handle gracefully in UI.
 
 ## Key Design Decisions
-- **Configuration**: Uses `alecthomas/kong` for configuration parsing and defaults, with a custom YAML loader. Global state is avoided; `Config` structs are passed explicitly.
+- **Configuration**: Uses `alecthomas/kong` for configuration parsing and defaults, with a custom YAML loader. Settings are loaded via infrastructure store and passed explicitly.
 - **Dependency Injection**: Use variables like `feed.ParserFunc` to mock external dependencies (network calls) in tests.
 
 ## Tools

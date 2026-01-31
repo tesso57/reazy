@@ -61,7 +61,6 @@ keymap:
   ...
 ```
 
-
 ## 類似のプロジェクト
 他にもRSSリーダーが存在します:
 - [eilmeldung](https://github.com/christo-auer/eilmeldung)

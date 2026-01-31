@@ -1,0 +1,107 @@
+// Package feed provides functionality to fetch and parse RSS feeds.
+package feed
+
+import (
+	"context"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/mmcdole/gofeed"
+	"github.com/tesso57/reazy/internal/domain/reading"
+)
+
+// ParserFunc is exposed for testing.
+// It allows mocking the feed parsing logic.
+var ParserFunc = func(url string) (*gofeed.Feed, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	fp := gofeed.NewParser()
+	return fp.ParseURLWithContext(url, ctx)
+}
+
+// Fetch parses a feed from the given URL.
+func Fetch(url string) (*reading.Feed, error) {
+	parsed, err := ParserFunc(url)
+	if err != nil {
+		return nil, err
+	}
+
+	f := &reading.Feed{
+		Title: parsed.Title,
+		URL:   url,
+		Items: make([]reading.Item, len(parsed.Items)),
+	}
+
+	for i, item := range parsed.Items {
+		pub := item.Published
+		if pub == "" {
+			pub = item.Updated
+		}
+		var date time.Time
+		if item.PublishedParsed != nil {
+			date = *item.PublishedParsed
+		} else if item.UpdatedParsed != nil {
+			date = *item.UpdatedParsed
+		}
+
+		f.Items[i] = reading.Item{
+			GUID:        item.GUID,
+			Title:       item.Title,
+			Link:        item.Link,
+			Published:   pub,
+			Description: item.Description,
+			Content:     item.Content,
+			Date:        date,
+			FeedTitle:   parsed.Title,
+			FeedURL:     url,
+		}
+	}
+
+	return f, nil
+}
+
+// FetchAll parses multiple feeds concurrently and aggregates items.
+func FetchAll(urls []string) (*reading.Feed, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var allItems []reading.Item
+
+	for _, url := range urls {
+		wg.Add(1)
+		go func(u string) {
+			defer wg.Done()
+			f, err := Fetch(u)
+			if err == nil {
+				mu.Lock()
+				allItems = append(allItems, f.Items...)
+				mu.Unlock()
+			}
+		}(url)
+	}
+	wg.Wait()
+
+	// Sort by Date descending
+	sort.Slice(allItems, func(i, j int) bool {
+		return allItems[i].Date.After(allItems[j].Date)
+	})
+
+	return &reading.Feed{
+		Title: "All Feeds",
+		URL:   reading.AllFeedsURL,
+		Items: allItems,
+	}, nil
+}
+
+// Fetcher implements the usecase.FeedFetcher interface.
+type Fetcher struct{}
+
+// Fetch fetches a single feed.
+func (Fetcher) Fetch(url string) (*reading.Feed, error) {
+	return Fetch(url)
+}
+
+// FetchAll fetches and aggregates multiple feeds.
+func (Fetcher) FetchAll(urls []string) (*reading.Feed, error) {
+	return FetchAll(urls)
+}
