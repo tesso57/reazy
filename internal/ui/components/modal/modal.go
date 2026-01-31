@@ -15,6 +15,8 @@ const (
 	AddFeed
 	// Help shows the help dialog.
 	Help
+	// Quit shows the quit confirmation dialog.
+	Quit
 )
 
 // Props defines the properties for the modal component.
@@ -44,6 +46,14 @@ func Render(p Props) string {
 		// So Body here is that whole string.
 		content = lipgloss.NewStyle().
 			Width(40).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderColor).
+			Padding(1, 2).
+			Render(p.Body)
+	} else if p.Kind == Quit {
+		// Quit Confirmation
+		borderColor = lipgloss.Color("196") // Red for Quit
+		content = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderColor).
 			Padding(1, 2).

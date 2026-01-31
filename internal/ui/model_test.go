@@ -41,6 +41,8 @@ func TestItemMethods(t *testing.T) {
 		desc:      "Desc",
 		link:      "Link",
 		published: "2023",
+		isRead:    true,
+		feedTitle: "Feed",
 	}
 
 	if i.FilterValue() != "Title" {
@@ -48,6 +50,15 @@ func TestItemMethods(t *testing.T) {
 	}
 	if i.Title() != "Title" {
 		t.Errorf("Title mismatch")
+	}
+	if i.URL() != "Link" {
+		t.Errorf("URL mismatch")
+	}
+	if !i.IsRead() {
+		t.Errorf("IsRead mismatch")
+	}
+	if i.FeedTitle() != "Feed" {
+		t.Errorf("FeedTitle mismatch")
 	}
 	if i.Description() != "2023 - Desc" {
 		t.Errorf("Description mismatch")
@@ -91,8 +102,16 @@ func TestUpdate(t *testing.T) {
 		t.Error("Resize failed")
 	}
 
-	// Test Key Quit
+	// Test Key Quit - Now brings up dialog
 	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if m.state != quitView {
+		t.Error("Expected quitView state after q")
+	}
+	// Cancel quit to return to feedView for subsequent tests
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if m.state != feedView {
+		t.Error("Expected feedView state after n")
+	}
 
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
 	m2 := tm.(*Model)
@@ -188,7 +207,10 @@ func TestUpdate(t *testing.T) {
 	// Test Error Msg
 	m.state = feedView
 	err := fmt.Errorf("fetch error")
-	tm, _ = m.Update(feedFetchedMsg{err: err})
+	// Ensure selection is known link
+	m.feedList.SetItems([]list.Item{&item{title: "Err Feed", link: "http://error.com"}})
+	m.feedList.Select(0)
+	tm, _ = m.Update(feedFetchedMsg{err: err, url: "http://error.com"})
 	m = tm.(*Model)
 	if m.err != err {
 		t.Error("Error not set")
@@ -298,7 +320,12 @@ func TestUpdate(t *testing.T) {
 			Title: "All",
 			Items: []feed.Item{itemWithFeed},
 		},
+		url: AllFeedsURL,
 	}
+	// Set selection to All Feeds for UI update
+	m.feedList.SetItems([]list.Item{&item{title: "All", link: AllFeedsURL}})
+	m.feedList.Select(0)
+
 	m.handleFeedFetchedMsg(msgAll)
 	// Check if title contains [TechCrunch]
 	if len(m.articleList.Items()) > 0 {
@@ -457,7 +484,12 @@ func TestHistoryIntegration(t *testing.T) {
 			URL:   "http://example.com/rss",
 			Items: fetchedItems,
 		},
+		url: "http://example.com/rss",
 	}
+
+	// Ensure selection matches for UI update
+	m.feedList.SetItems([]list.Item{&item{title: "Test Feed", link: "http://example.com/rss"}})
+	m.feedList.Select(0)
 
 	m.handleFeedFetchedMsg(msg)
 

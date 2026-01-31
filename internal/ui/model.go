@@ -30,6 +30,7 @@ const (
 	articleView
 	detailView
 	addingFeedView
+	quitView
 )
 
 // AllFeedsURL is the special URL for the "All Feeds" view.
@@ -37,20 +38,21 @@ const AllFeedsURL = "internal://all"
 
 // Model represents the main application state.
 type Model struct {
-	cfg         *config.Config
-	state       sessionState
-	feedList    list.Model
-	articleList list.Model
-	textInput   textinput.Model
-	viewport    viewport.Model
-	help        help.Model
-	spinner     spinner.Model
-	loading     bool
-	keys        KeyMap
-	width       int
-	height      int
-	currentFeed *feed.Feed
-	err         error
+	cfg           *config.Config
+	state         sessionState
+	feedList      list.Model
+	articleList   list.Model
+	textInput     textinput.Model
+	viewport      viewport.Model
+	help          help.Model
+	spinner       spinner.Model
+	loading       bool
+	keys          KeyMap
+	width         int
+	height        int
+	currentFeed   *feed.Feed
+	err           error
+	previousState sessionState
 
 	historyMgr *history.Manager
 	history    map[string]*history.Item // GUID -> Item
@@ -161,6 +163,7 @@ func NewModel(cfg *config.Config) *Model {
 	l := list.New([]list.Item{}, delegate.NewFeedDelegate(lipgloss.Color(cfg.Theme.FeedName)), 0, 0)
 	l.Title = "Reazy Feeds"
 	l.SetShowHelp(false)
+	l.SetShowTitle(false)
 	l.DisableQuitKeybindings()
 
 	l.SetItems([]list.Item{})
@@ -213,6 +216,11 @@ func NewModel(cfg *config.Config) *Model {
 	al.KeyMap.NextPage = m.keys.DownPage
 
 	m.refreshFeedList()
+	m.refreshFeedList()
+
+	// Initial population of article list for "All Feeds" (default selection)
+	m.updateArticleList(AllFeedsURL)
+
 	return m
 }
 
@@ -256,16 +264,17 @@ func (i *item) Description() string {
 type feedFetchedMsg struct {
 	feed *feed.Feed
 	err  error
+	url  string
 }
 
 func fetchFeedCmd(url string, allFeeds []string) tea.Cmd {
 	return func() tea.Msg {
 		if url == AllFeedsURL {
 			f, err := feed.FetchAll(allFeeds)
-			return feedFetchedMsg{feed: f, err: err}
+			return feedFetchedMsg{feed: f, err: err, url: AllFeedsURL}
 		}
 		f, err := feed.Fetch(url)
-		return feedFetchedMsg{feed: f, err: err}
+		return feedFetchedMsg{feed: f, err: err, url: url}
 	}
 }
 
@@ -284,9 +293,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == addingFeedView {
 			return m.updateAddingFeedView(msg)
 		}
+		if m.state == quitView {
+			return m.updateQuitView(msg)
+		}
 
 		if key.Matches(msg, m.keys.Quit) {
-			return m, tea.Quit
+			m.previousState = m.state
+			m.state = quitView
+			return m, nil
 		}
 
 		// Try to handle keys in current state helpers
@@ -308,11 +322,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		sidebarWidth := msg.Width / 3
 		mainWidth := msg.Width - sidebarWidth
-		listHeight := msg.Height - 3
+		// Sidebar now has external Title (2 lines approx: Text + Padding)
+		// List internal title was 2 lines?
+		// We need to ensure we don't overflow.
+		// Previous height was msg.Height - 3.
+		// If we render Title outside, we occupy space.
+		// Title + PaddingBottom(1) = 2 lines.
+		// So listHeight should be msg.Height - 3 - 2 = msg.Height - 5?
+		// Let's conservative decrease.
+		listHeight := msg.Height - 5
 		m.feedList.SetSize(sidebarWidth, listHeight)
 		m.articleList.SetSize(mainWidth, listHeight)
 		m.viewport.Width = msg.Width
 		m.viewport.Height = msg.Height - 5 // Leave room for header (2 lines) /footer
+
+		// Re-size article list if needed when window resizes
+		m.articleList.SetSize(mainWidth, listHeight)
 
 	case feedFetchedMsg:
 		m.handleFeedFetchedMsg(msg)
@@ -327,7 +352,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch m.state {
 	case feedView:
+		prevIdx := m.feedList.Index()
 		m.feedList, cmd = m.feedList.Update(msg)
+		if m.feedList.Index() != prevIdx {
+			m.err = nil // Clear error on new selection
+			if i, ok := m.feedList.SelectedItem().(*item); ok {
+				m.updateArticleList(i.link)
+
+				// Auto-fetch if no items in cache
+				if len(m.articleList.Items()) == 0 {
+					m.loading = true
+					// Ensure spinner ticks and fetch runs
+					cmds = append(cmds, tea.Batch(m.spinner.Tick, fetchFeedCmd(i.link, m.cfg.Feeds)))
+				} else {
+					// Stop loading if we have items (cancels previous spinner for stale requests)
+					m.loading = false
+				}
+			}
+		}
 		cmds = append(cmds, cmd)
 	case articleView:
 		m.articleList, cmd = m.articleList.Update(msg)
@@ -359,6 +401,17 @@ func (m *Model) updateAddingFeedView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	m.textInput, cmd = m.textInput.Update(msg)
 	return m, cmd
+}
+
+func (m *Model) updateQuitView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		return m, tea.Quit
+	case "n", "N", "esc", "q", "Q":
+		m.state = m.previousState
+		return m, nil
+	}
+	return m, nil
 }
 
 func (m *Model) handleFeedViewKeys(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -466,15 +519,12 @@ func (m *Model) handleDetailViewKeys(msg tea.KeyMsg) (tea.Cmd, bool) {
 }
 
 func (m *Model) handleFeedFetchedMsg(msg feedFetchedMsg) {
-	m.loading = false
-	if msg.err != nil {
-		m.err = msg.err
-		m.state = feedView
-	} else {
-		m.currentFeed = msg.feed
-		m.articleList.Title = msg.feed.Title
+	// 1. Merge and Save History (Always, if successful)
+	if msg.err == nil {
+		m.loading = false // Default assumption to stop loading on success? No, handle in UI check.
+		// Actually, we should only stop loading if it matches current view.
+		// But existing logic merges history first.
 
-		// 1. Merge fetched items into history
 		for _, it := range msg.feed.Items {
 			guid := it.Link
 			if guid == "" {
@@ -496,63 +546,99 @@ func (m *Model) handleFeedFetchedMsg(msg feedFetchedMsg) {
 					SavedAt:     time.Now(),
 				}
 			} else if m.history[guid].FeedURL == "" {
-				// Update FeedURL if missing (migration)
 				m.history[guid].FeedURL = it.FeedURL
 			}
 		}
 
-		// 2. Save History
-		// Convert map to slice for saving
+		// Save History
 		var allHistory []*history.Item
 		for _, v := range m.history {
 			allHistory = append(allHistory, v)
 		}
-		// Best effort save
 		go func() { _ = m.historyMgr.Save(allHistory) }()
+	}
 
-		// 3. Prepare Display Items
-		var displayItems []*history.Item
-		for _, hItem := range m.history {
-			if m.currentFeed.URL == AllFeedsURL {
-				displayItems = append(displayItems, hItem)
-			} else if hItem.FeedURL == m.currentFeed.URL {
-				displayItems = append(displayItems, hItem)
-			}
+	// 2. Check if we should update the UI
+	// We only update if the fetched URL matches the currently selected feed.
+	currentURL := ""
+	if i, ok := m.feedList.SelectedItem().(*item); ok {
+		currentURL = i.link
+	}
+
+	if msg.url == currentURL {
+		m.loading = false
+		if msg.err != nil {
+			m.err = msg.err
+			// Only force state reset if we were in article view waiting?
+			// But for sidebar auto-fetch we are in feedView.
+			// Existing logic used m.state = feedView.
+			// Just leave state as is usually safer but we can keep assignment.
+			m.state = feedView
+		} else {
+			m.currentFeed = msg.feed
+			m.articleList.Title = msg.feed.Title
+			// Update the list with newly merged items
+			m.updateArticleList(msg.url)
+		}
+	} else {
+		// Stale response. Logic:
+		// - History is updated (if success).
+		// - UI is NOT updated.
+		// - m.loading is NOT touched (keep waiting for the *correct* response if any)
+	}
+}
+
+func (m *Model) updateArticleList(feedURL string) {
+	// 3. Prepare Display Items using Cached History
+	var displayItems []*history.Item
+	for _, hItem := range m.history {
+		if feedURL == AllFeedsURL {
+			displayItems = append(displayItems, hItem)
+		} else if hItem.FeedURL == feedURL {
+			displayItems = append(displayItems, hItem)
+		}
+	}
+
+	// Sort by Date Descending
+	sort.Slice(displayItems, func(i, j int) bool {
+		return displayItems[i].Date.After(displayItems[j].Date)
+	})
+
+	items := make([]list.Item, len(displayItems))
+
+	for i, it := range displayItems {
+		title := it.Title
+		if feedURL == AllFeedsURL && it.FeedTitle != "" {
+			title = fmt.Sprintf("[%s] %s", it.FeedTitle, title)
 		}
 
-		// Sort by Date Descending
-		sort.Slice(displayItems, func(i, j int) bool {
-			return displayItems[i].Date.After(displayItems[j].Date)
-		})
-
-		items := make([]list.Item, len(displayItems))
-
-		for i, it := range displayItems {
-			title := it.Title
-			if m.currentFeed.URL == AllFeedsURL && it.FeedTitle != "" {
-				// We format the title here, but without coloring.
-				// Coloring should happen in Delegate if possible, but for mixed content string
-				// it's easier to prepare the string here if we want to avoid complex delegate logic.
-				// However, refactoring goal is to remove lipgloss.
-				// So we produce a clean string here: "[FeedName] Title"
-				title = fmt.Sprintf("[%s] %s", it.FeedTitle, title)
-			}
-
-			// Faint styling for read items is handled by Delegate via IsRead check.
-
-			items[i] = &item{
-				title:     title, // Plain text title
-				desc:      it.Description,
-				content:   it.Content,
-				link:      it.Link,
-				published: it.Published,
-				guid:      it.GUID,
-				isRead:    it.IsRead,
-				feedTitle: it.FeedTitle,
-				feedURL:   it.FeedURL,
-			}
+		items[i] = &item{
+			title:     title,
+			desc:      it.Description,
+			content:   it.Content,
+			link:      it.Link,
+			published: it.Published,
+			guid:      it.GUID,
+			isRead:    it.IsRead,
+			feedTitle: it.FeedTitle,
+			feedURL:   it.FeedURL,
 		}
-		m.articleList.SetItems(items)
+	}
+	m.articleList.SetItems(items)
+
+	// Set Title
+	if feedURL == AllFeedsURL {
+		m.articleList.Title = "All Feeds"
+	} else {
+		// Find feed title from config if possible, or just use URL/Placeholder
+		// For now, let's look it up in cfg.Feeds if we want a nice title, but we have the feedURL.
+		// The original 'item' in feedList has the title combined.
+		// We can just set it to "Articles" or the Feed URL for now.
+		m.articleList.Title = "Articles"
+		// If we want the actual Feed Title we might need to lookup or pass it.
+		// But in feedFetchedMsg we get the Feed object. Here we just have URL.
+		// Simple improvement: Iterate cfg.Feeds or lookup from history map (if we had feed metadata).
+		// For now simple "Articles" is safe.
 	}
 }
 

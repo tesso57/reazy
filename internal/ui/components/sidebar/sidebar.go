@@ -10,6 +10,7 @@ type Props struct {
 	View   string
 	Width  int
 	Height int
+	Title  string
 	Active bool
 }
 
@@ -25,5 +26,14 @@ func Render(p Props) string {
 		sidebarStyle = sidebarStyle.BorderForeground(lipgloss.Color("205"))
 	}
 
-	return sidebarStyle.Render(p.View)
+	titleStyle := lipgloss.NewStyle().
+		PaddingLeft(2).
+		PaddingBottom(1).
+		Foreground(lipgloss.Color("205")) // Use same color as spinner/active border for consistency
+
+	return sidebarStyle.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		titleStyle.Render(p.Title),
+		p.View,
+	))
 }
