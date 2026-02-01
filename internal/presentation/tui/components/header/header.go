@@ -21,5 +21,5 @@ func Render(p Props) string {
 	}
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
-		Render(fmt.Sprintf("🔗 %s\n🏷️  %s\n", p.Link, p.FeedTitle))
+		Render(fmt.Sprintf("🔗 %s\n🏷️  %s", p.Link, p.FeedTitle))
 }

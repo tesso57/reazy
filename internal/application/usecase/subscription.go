@@ -1,6 +1,11 @@
 // Package usecase contains application-level services.
 package usecase
 
+import (
+	"fmt"
+	"strings"
+)
+
 // SubscriptionRepository abstracts persistence for feed subscriptions.
 type SubscriptionRepository interface {
 	List() ([]string, error)
@@ -25,7 +30,14 @@ func (s SubscriptionService) List() ([]string, error) {
 
 // Add registers a new feed URL and returns the updated list.
 func (s SubscriptionService) Add(url string) ([]string, error) {
-	if err := s.Repo.Add(url); err != nil {
+	trimmed := strings.TrimSpace(url)
+	if trimmed == "" {
+		return nil, fmt.Errorf("feed url is empty")
+	}
+	if strings.ContainsAny(trimmed, " \t\r\n") {
+		return nil, fmt.Errorf("feed url contains whitespace")
+	}
+	if err := s.Repo.Add(trimmed); err != nil {
 		return nil, err
 	}
 	return s.Repo.List()

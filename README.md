@@ -1,11 +1,11 @@
 # Reazy
 
-Reazy (Read + Lazy) is a modern, terminal-based RSS reader built with Go and Bubble Tea. It provides a simple, Vim-like interface for managing and reading your favorite RSS feeds directly from the command line.
+Reazy (Read + Lazy) is a modern, terminal-based RSS/Atom reader built with Go and Bubble Tea. It provides a simple, Vim-like interface for managing and reading your favorite feeds directly from the command line.
 
 ## Features
 
 - **TUI Interface**: Clean and responsive terminal UI.
-- **Feed Management**: Add and delete RSS feeds easily.
+- **Feed Management**: Add and delete RSS/Atom feeds easily.
 - **Reading**: Browse feed items and open full articles in your default browser.
 - **Vim Bindings**: Navigation with `j`, `k`, `h`, `l`.
 - **Customizable**: Configurable keybindings and feed list via YAML.
@@ -55,6 +55,7 @@ Example:
 ```yaml
 feeds:
   - https://news.ycombinator.com/rss
+  - https://github.com/golang/go/releases.atom
 keymap:
   up: k
   down: j

@@ -107,3 +107,42 @@ func TestStore_AddRemoveFeed(t *testing.T) {
 		t.Error("Expected error for invalid index")
 	}
 }
+
+func TestLoad_NormalizesFeeds(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "reazy_test_normalize")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	content := `feeds:
+  - " https://example.com/rss "
+  - |
+      https://example.com/one.atom
+      https://example.com/two.atom
+`
+	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	store, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	want := []string{
+		"https://example.com/rss",
+		"https://example.com/one.atom",
+		"https://example.com/two.atom",
+	}
+
+	if len(store.Settings.Feeds) != len(want) {
+		t.Fatalf("Expected %d feeds, got %d", len(want), len(store.Settings.Feeds))
+	}
+	for i, got := range store.Settings.Feeds {
+		if got != want[i] {
+			t.Fatalf("Expected feed %d to be %q, got %q", i, want[i], got)
+		}
+	}
+}

@@ -1,7 +1,6 @@
 package listview
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -25,7 +24,7 @@ type FeedDelegate struct {
 // NewFeedDelegate creates a new FeedDelegate.
 func NewFeedDelegate(themeColor lipgloss.Color) *FeedDelegate {
 	return &FeedDelegate{
-		Styles: list.NewDefaultItemStyles(),
+		Styles: withItemPadding(list.NewDefaultItemStyles()),
 		Theme:  themeColor,
 	}
 }
@@ -54,12 +53,7 @@ func (d FeedDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 
 	title := i.Title()
 
-	// Apply styles based on selection
-	if index == m.Index() {
-		title = d.Styles.SelectedTitle.Render(title)
-	} else {
-		title = d.Styles.NormalTitle.Render(title)
-	}
-
-	_, _ = fmt.Fprint(w, title)
+	style := itemStyle(d.Styles, m, index)
+	title = truncateItemText(m, style, title)
+	renderItemText(w, style, title)
 }

@@ -2,7 +2,6 @@
 package listview
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -26,7 +25,7 @@ type ArticleDelegate struct {
 // NewArticleDelegate creates a new ArticleDelegate.
 func NewArticleDelegate() *ArticleDelegate {
 	return &ArticleDelegate{
-		Styles: list.NewDefaultItemStyles(),
+		Styles: withItemPadding(list.NewDefaultItemStyles()),
 	}
 }
 
@@ -54,25 +53,13 @@ func (d *ArticleDelegate) Render(w io.Writer, m list.Model, index int, item list
 
 	title := i.Title()
 
-	// Prepend FeedTitle if available (logic migrated from model.go)
-	// Actually, the Title() method on the item itself already contained the formatted title
-	// in the previous implementation. We should move that logic here if possible,
-	// but to keep it simple, let's assume item.Title() returns the main text.
-	// In the original code, the Item struct had a customized Title() but logic for prepending
-	// [FeedName] was in handleFeedFetchedMsg and baked into the item.title string.
-	// Ideally we move that dynamic composition here.
+	style := itemStyle(d.Styles, m, index)
+	title = truncateItemText(m, style, title)
 
 	// If IsRead, Apply Faint
 	if i.IsRead() {
 		title = lipgloss.NewStyle().Faint(true).Render(title)
 	}
 
-	// Apply Selection Styles
-	if index == m.Index() {
-		title = d.Styles.SelectedTitle.Render(title)
-	} else {
-		title = d.Styles.NormalTitle.Render(title)
-	}
-
-	_, _ = fmt.Fprint(w, title)
+	renderItemText(w, style, title)
 }

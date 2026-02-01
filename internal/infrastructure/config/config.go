@@ -58,6 +58,7 @@ func Load(customPath ...string) (*Store, error) {
 	}
 
 	store.Settings = cfg
+	store.Settings.Feeds = normalizeFeeds(store.Settings.Feeds)
 
 	// Save defaults if new file
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -79,6 +80,21 @@ func Load(customPath ...string) (*Store, error) {
 	}
 
 	return store, nil
+}
+
+func normalizeFeeds(feeds []string) []string {
+	if len(feeds) == 0 {
+		return feeds
+	}
+	normalized := make([]string, 0, len(feeds))
+	for _, feed := range feeds {
+		for _, item := range strings.Fields(feed) {
+			if item != "" {
+				normalized = append(normalized, item)
+			}
+		}
+	}
+	return normalized
 }
 
 func yamlKongLoader(r io.Reader) (kong.Resolver, error) {

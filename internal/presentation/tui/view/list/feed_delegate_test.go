@@ -76,7 +76,7 @@ func TestFeedDelegate_Render(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := &bytes.Buffer{}
-			l := list.New([]list.Item{}, d, 10, 10)
+			l := list.New([]list.Item{}, d, 80, 10)
 			l.Select(tc.mdlIndex)
 
 			d.Render(buf, l, tc.index, tc.item)

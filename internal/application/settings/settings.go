@@ -26,7 +26,7 @@ type ThemeConfig struct {
 
 // Settings represents the application configuration.
 type Settings struct {
-	Feeds       []string     `yaml:"feeds" kong:"help='RSS Feed URLs',default='https://news.ycombinator.com/rss'"`
+	Feeds       []string     `yaml:"feeds" kong:"help='RSS/Atom Feed URLs',default='https://news.ycombinator.com/rss'"`
 	KeyMap      KeyMapConfig `yaml:"keymap" kong:"embed,prefix='keymap.'"`
 	Theme       ThemeConfig  `yaml:"theme" kong:"embed,prefix='theme.'"`
 	HistoryFile string       `yaml:"history_file" kong:"help='History file path'"`

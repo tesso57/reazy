@@ -1,8 +1,10 @@
 package feed
 
 import (
-	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,15 +27,47 @@ func TestDefaultParser(t *testing.T) {
 	}
 }
 
+func TestDefaultParserHeaders(t *testing.T) {
+	var gotAccept string
+	var gotUA string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAccept = r.Header.Get("Accept")
+		gotUA = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/atom+xml")
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Feed</title>
+  <id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>
+  <updated>2026-01-01T00:00:00Z</updated>
+  <entry>
+    <title>Atom-Powered Robots Run Amok</title>
+    <id>urn:uuid:1225c695-cfb8-4ebb-aaaa-80da344efa6a</id>
+    <updated>2026-01-01T00:00:00Z</updated>
+    <link href="https://example.com/robots"/>
+    <summary>Some text.</summary>
+  </entry>
+</feed>`))
+	}))
+	defer server.Close()
+
+	_, err := defaultParser(server.URL)
+	if err != nil {
+		t.Fatalf("default parser failed: %v", err)
+	}
+
+	if gotUA != "Reazy/1.0" {
+		t.Errorf("Expected User-Agent 'Reazy/1.0', got %q", gotUA)
+	}
+	if gotAccept == "" || !strings.Contains(gotAccept, "application/atom+xml") {
+		t.Errorf("Expected Accept header to include atom, got %q", gotAccept)
+	}
+}
+
 func TestFetch(t *testing.T) {
 	// Restore original parser after test
 	defer func() {
-		ParserFunc = func(url string) (*gofeed.Feed, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			fp := gofeed.NewParser()
-			return fp.ParseURLWithContext(url, ctx)
-		}
+		ParserFunc = defaultParser
 	}()
 
 	t.Run("Success", func(t *testing.T) {
@@ -100,6 +134,28 @@ func TestFetch(t *testing.T) {
 			t.Error("Expected error, got nil")
 		}
 	})
+}
+
+func TestFetchTrimsWhitespace(t *testing.T) {
+	originalParser := ParserFunc
+	defer func() { ParserFunc = originalParser }()
+
+	var gotURL string
+	ParserFunc = func(url string) (*gofeed.Feed, error) {
+		gotURL = url
+		return &gofeed.Feed{Title: "Trimmed", Items: []*gofeed.Item{}}, nil
+	}
+
+	feed, err := Fetch(" \nhttps://example.com/rss\t ")
+	if err != nil {
+		t.Fatalf("Fetch failed: %v", err)
+	}
+	if gotURL != "https://example.com/rss" {
+		t.Fatalf("Expected trimmed url, got %q", gotURL)
+	}
+	if feed.URL != "https://example.com/rss" {
+		t.Fatalf("Expected feed URL to be trimmed, got %q", feed.URL)
+	}
 }
 
 func TestFetchAll(t *testing.T) {

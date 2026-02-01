@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/tesso57/reazy/internal/domain/reading"
+	"github.com/tesso57/reazy/internal/presentation/tui/textutil"
 )
 
 // Item is a view model for list items.
@@ -50,7 +51,7 @@ func BuildFeedListItems(feeds []string) []list.Item {
 	items := make([]list.Item, len(feeds)+1)
 	items[0] = &Item{TitleText: "0. * All Feeds", Link: reading.AllFeedsURL}
 	for i, f := range feeds {
-		items[i+1] = &Item{TitleText: fmt.Sprintf("%d. %s", i+1, f), Link: f}
+		items[i+1] = &Item{TitleText: fmt.Sprintf("%d. %s", i+1, textutil.SingleLine(f)), Link: f}
 	}
 	return items
 }
@@ -73,9 +74,12 @@ func BuildArticleListItems(history *reading.History, feedURL string) []list.Item
 
 	result := make([]list.Item, len(items))
 	for i, it := range items {
-		title := it.Title
-		if feedURL == reading.AllFeedsURL && it.FeedTitle != "" {
-			title = fmt.Sprintf("[%s] %s", it.FeedTitle, title)
+		title := textutil.SingleLine(it.Title)
+		feedTitle := textutil.SingleLine(it.FeedTitle)
+		if feedURL == reading.AllFeedsURL && feedTitle != "" {
+			title = fmt.Sprintf("%d. [%s] %s", i+1, feedTitle, title)
+		} else {
+			title = fmt.Sprintf("%d. %s", i+1, title)
 		}
 
 		result[i] = &Item{

@@ -3,6 +3,7 @@ package update
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,9 +31,10 @@ type FeedFetchedMsg struct {
 // FetchFeedCmd creates a command to fetch feeds using the reading service.
 func FetchFeedCmd(readingSvc usecase.ReadingService, url string, feeds []string) tea.Cmd {
 	allFeeds := append([]string(nil), feeds...)
+	trimmed := strings.TrimSpace(url)
 	return func() tea.Msg {
-		f, err := readingSvc.FetchFeed(url, allFeeds)
-		return FeedFetchedMsg{Feed: f, Err: err, URL: url}
+		f, err := readingSvc.FetchFeed(trimmed, allFeeds)
+		return FeedFetchedMsg{Feed: f, Err: err, URL: trimmed}
 	}
 }
 
@@ -43,6 +45,9 @@ func HandleKeyMsg(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.Cmd, bool
 	}
 	if s.Session == state.QuitView {
 		return handleQuitView(s, msg)
+	}
+	if s.Session == state.DeleteFeedView {
+		return handleDeleteFeedView(s, msg, deps)
 	}
 
 	parsed := intent.FromKeyMsg(msg, s.Keys)
@@ -68,14 +73,8 @@ func HandleKeyMsg(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.Cmd, bool
 func HandleWindowSize(s *state.ModelState, msg tea.WindowSizeMsg) {
 	s.Width = msg.Width
 	s.Height = msg.Height
-	sidebarWidth := msg.Width / 3
-	mainWidth := msg.Width - sidebarWidth
-	listHeight := msg.Height - 5
-	s.FeedList.SetSize(sidebarWidth, listHeight)
-	s.ArticleList.SetSize(mainWidth, listHeight)
-	s.Viewport.Width = msg.Width
-	s.Viewport.Height = msg.Height - 5
-	s.ArticleList.SetSize(mainWidth, listHeight)
+
+	UpdateListSizes(s)
 }
 
 // HandleFeedFetchedMsg merges history and updates lists if applicable.
@@ -100,6 +99,7 @@ func HandleFeedFetchedMsg(s *state.ModelState, msg FeedFetchedMsg, deps Deps) {
 		}
 		s.CurrentFeed = msg.Feed
 		presenter.ApplyArticleList(&s.ArticleList, s.History, msg.URL)
+		UpdateListSizes(s)
 	}
 }
 
@@ -114,6 +114,7 @@ func handleAddingFeedView(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.C
 			} else {
 				s.Feeds = feeds
 				presenter.ApplyFeedList(&s.FeedList, s.Feeds)
+				UpdateListSizes(s)
 			}
 			s.TextInput.Reset()
 		}
@@ -141,6 +142,30 @@ func handleQuitView(s *state.ModelState, msg tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, true
 }
 
+func handleDeleteFeedView(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "y", "Y":
+		index := s.FeedList.Index()
+		if index > 0 {
+			realIndex := index - 1
+			feeds, err := deps.Subscriptions.Remove(realIndex)
+			if err != nil {
+				s.Err = err
+			} else {
+				s.Feeds = feeds
+				presenter.ApplyFeedList(&s.FeedList, s.Feeds)
+				UpdateListSizes(s)
+			}
+		}
+		s.Session = state.FeedView
+		return nil, true
+	case "n", "N", "esc", "q", "Q":
+		s.Session = state.FeedView
+		return nil, true
+	}
+	return nil, true
+}
+
 func handleFeedViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (tea.Cmd, bool) {
 	switch in.Type {
 	case intent.Open:
@@ -161,14 +186,7 @@ func handleFeedViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (tea
 			if index == 0 {
 				return nil, true
 			}
-			realIndex := index - 1
-			feeds, err := deps.Subscriptions.Remove(realIndex)
-			if err != nil {
-				s.Err = err
-			} else {
-				s.Feeds = feeds
-				presenter.ApplyFeedList(&s.FeedList, s.Feeds)
-			}
+			s.Session = state.DeleteFeedView
 		}
 		return nil, true
 	case intent.ToggleHelp:

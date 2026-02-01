@@ -16,7 +16,10 @@ const (
 	// Help shows the help dialog.
 	Help
 	// Quit shows the quit confirmation dialog.
+	// Quit shows the quit confirmation dialog.
 	Quit
+	// DeleteFeed shows the delete feed confirmation dialog.
+	DeleteFeed
 )
 
 // Props defines the properties for the modal component.
@@ -53,6 +56,14 @@ func Render(p Props) string {
 	} else if p.Kind == Quit {
 		// Quit Confirmation
 		borderColor = lipgloss.Color("196") // Red for Quit
+		content = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderColor).
+			Padding(1, 2).
+			Render(p.Body)
+	} else if p.Kind == DeleteFeed {
+		// Delete Feed Confirmation
+		borderColor = lipgloss.Color("196") // Red for Delete
 		content = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderColor).

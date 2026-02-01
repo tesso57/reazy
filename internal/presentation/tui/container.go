@@ -8,8 +8,10 @@ import (
 	main_view "github.com/tesso57/reazy/internal/presentation/tui/components/main"
 	"github.com/tesso57/reazy/internal/presentation/tui/components/modal"
 	"github.com/tesso57/reazy/internal/presentation/tui/components/sidebar"
+	"github.com/tesso57/reazy/internal/presentation/tui/metrics"
 	"github.com/tesso57/reazy/internal/presentation/tui/presenter"
 	"github.com/tesso57/reazy/internal/presentation/tui/state"
+	"github.com/tesso57/reazy/internal/presentation/tui/textutil"
 	"github.com/tesso57/reazy/internal/presentation/tui/view"
 )
 
@@ -34,7 +36,7 @@ func (m *Model) buildSidebarProps() sidebar.Props {
 }
 
 func (m *Model) buildHeaderProps() header.Props {
-	visible := m.state.Session == state.ArticleView || m.state.Session == state.DetailView || m.state.Session == state.FeedView
+	visible := headerVisible(m.state.Session)
 	var link, feedTitle string
 
 	if visible {
@@ -51,17 +53,18 @@ func (m *Model) buildHeaderProps() header.Props {
 
 		if currentItem != nil {
 			// Truncate logic
-			availableWidth := m.state.Width - 4
-			link = currentItem.Link
-			if len(link) > availableWidth && availableWidth > 0 {
-				link = link[:availableWidth] + "..."
-			}
+			sidebarWidth := m.state.Width / 3
+			mainWidth := m.state.Width - sidebarWidth
+			// Main view has 1 padding left. Header has "🔗 " prefix (~3 chars).
+			// Safe buffer: metrics.HeaderWidthPadding.
+			availableWidth := mainWidth - metrics.HeaderWidthPadding
+			link = headerLine(currentItem.Link, availableWidth)
 			// For feed items, title is usually formatted index + title.
 			// But header Props expects "FeedTitle".
 			// In feedList item, we don't store FeedTitle explicitly?
 			// The item struct has feedTitle field.
 			// Let's check model.go logic.
-			feedTitle = currentItem.FeedTitleText
+			feedTitle = headerLine(currentItem.FeedTitleText, availableWidth)
 			// If feedTitle is empty (e.g. initial item for feedList doesn't populate feedTitle?),
 			// use Title.
 			if feedTitle == "" {
@@ -69,7 +72,7 @@ func (m *Model) buildHeaderProps() header.Props {
 				// We can use link as title if feedTitle is missing.
 				// Or m.currentFeed.Title if available and matches?
 				// Simple fallback:
-				feedTitle = currentItem.TitleText
+				feedTitle = headerLine(currentItem.TitleText, availableWidth)
 			}
 		}
 	}
@@ -93,10 +96,18 @@ func (m *Model) buildMainProps() main_view.Props {
 	default:
 		body = ""
 	}
+	if m.state.Err != nil && (m.state.Session == state.ArticleView || m.state.Session == state.FeedView) && !m.state.Loading {
+		body = fmt.Sprintf("Error: %v\n\n%s", m.state.Err, body)
+	}
+
+	headerHeight := 0
+	if headerVisible(m.state.Session) {
+		headerHeight = metrics.HeaderLines
+	}
 
 	return main_view.Props{
 		Width:  m.state.ArticleList.Width(),
-		Height: m.state.ArticleList.Height(),
+		Height: m.state.ArticleList.Height() + headerHeight,
 		Header: "", // Will be filled by Render using HeaderProps
 		Body:   body,
 	}
@@ -124,6 +135,15 @@ func (m *Model) buildModalProps() modal.Props {
 			Height:  m.state.Height,
 		}
 	}
+	if m.state.Session == state.DeleteFeedView {
+		return modal.Props{
+			Visible: true,
+			Kind:    modal.DeleteFeed,
+			Body:    "Are you sure you want to delete this feed?\n\n(y/n)",
+			Width:   m.state.Width,
+			Height:  m.state.Height,
+		}
+	}
 	if m.state.Help.ShowAll {
 		return modal.Props{
 			Visible: true,
@@ -143,4 +163,12 @@ func (m *Model) buildFooterProps() string {
 	// So footer string isn't used if modal is active.
 	// buildProps generates it anyway.
 	return m.state.Help.View(&m.state.Keys)
+}
+
+func headerVisible(session state.Session) bool {
+	return session == state.ArticleView || session == state.DetailView || session == state.FeedView
+}
+
+func headerLine(text string, width int) string {
+	return textutil.Truncate(textutil.SingleLine(text), width)
 }

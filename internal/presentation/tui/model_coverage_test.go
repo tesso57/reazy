@@ -117,6 +117,11 @@ func TestHandleFeedViewKeys_AddDelete(t *testing.T) {
 	m.state.FeedList.Select(1)
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	m = tm.(*Model)
+	if m.state.Session != state.DeleteFeedView {
+		t.Error("Should switch to DeleteFeedView on 'x'")
+	}
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = tm.(*Model)
 
 	// Should be removed
 	items = m.state.FeedList.Items()

@@ -20,5 +20,13 @@ func Render(p Props) string {
 		Height(p.Height).
 		PaddingLeft(1)
 
-	return mainStyle.Render(p.Header + p.Body)
+	content := p.Body
+	if p.Header != "" {
+		if p.Body != "" {
+			content = p.Header + "\n" + p.Body
+		} else {
+			content = p.Header
+		}
+	}
+	return mainStyle.Render(content)
 }

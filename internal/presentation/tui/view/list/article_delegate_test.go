@@ -99,7 +99,7 @@ func TestArticleDelegate_Render(t *testing.T) {
 			// we have to rely on `index == m.Index()`.
 			// The list.Model struct has unexported `cursor`.
 			// However, we can use `list.New` to create a model and set the cursor.
-			l := list.New([]list.Item{}, d, 10, 10)
+			l := list.New([]list.Item{}, d, 80, 10)
 			l.Select(tc.mdlIndex)
 
 			d.Render(buf, l, tc.index, tc.item)

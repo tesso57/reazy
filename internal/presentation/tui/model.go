@@ -71,6 +71,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state.Err = nil
 			if i, ok := m.state.FeedList.SelectedItem().(*presenter.Item); ok {
 				presenter.ApplyArticleList(&m.state.ArticleList, m.state.History, i.Link)
+				update.UpdateListSizes(m.state)
 
 				if len(m.state.ArticleList.Items()) == 0 {
 					m.state.Loading = true
@@ -150,7 +151,7 @@ func newArticleList() list.Model {
 
 func newTextInput() textinput.Model {
 	ti := textinput.New()
-	ti.Placeholder = "https://example.com/rss"
+	ti.Placeholder = "https://example.com/feed.xml (RSS/Atom)"
 	ti.Focus()
 	ti.CharLimit = 156
 	ti.Width = 40

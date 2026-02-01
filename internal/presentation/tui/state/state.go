@@ -16,6 +16,7 @@ const (
 	ArticleView
 	DetailView
 	AddingFeedView
+	DeleteFeedView
 	QuitView
 )
 

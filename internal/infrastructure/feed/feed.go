@@ -1,9 +1,11 @@
-// Package feed provides functionality to fetch and parse RSS feeds.
+// Package feed provides functionality to fetch and parse RSS/Atom feeds.
 package feed
 
 import (
 	"context"
+	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,17 +13,40 @@ import (
 	"github.com/tesso57/reazy/internal/domain/reading"
 )
 
+const feedAcceptHeader = "application/atom+xml, application/rss+xml, application/feed+json, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.5"
+
+type acceptTransport struct {
+	base http.RoundTripper
+}
+
+func (t acceptTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	clone := req.Clone(req.Context())
+	if clone.Header.Get("Accept") == "" {
+		clone.Header.Set("Accept", feedAcceptHeader)
+	}
+	return base.RoundTrip(clone)
+}
+
 // ParserFunc is exposed for testing.
 // It allows mocking the feed parsing logic.
-var ParserFunc = func(url string) (*gofeed.Feed, error) {
+var ParserFunc = defaultParser
+
+func defaultParser(url string) (*gofeed.Feed, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	fp := gofeed.NewParser()
+	fp.UserAgent = "Reazy/1.0"
+	fp.Client = &http.Client{Transport: acceptTransport{base: http.DefaultTransport}}
 	return fp.ParseURLWithContext(url, ctx)
 }
 
 // Fetch parses a feed from the given URL.
 func Fetch(url string) (*reading.Feed, error) {
+	url = strings.TrimSpace(url)
 	parsed, err := ParserFunc(url)
 	if err != nil {
 		return nil, err
