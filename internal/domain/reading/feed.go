@@ -6,6 +6,9 @@ import "time"
 // AllFeedsURL is the special URL used to represent the aggregated "All Feeds" view.
 const AllFeedsURL = "internal://all"
 
+// BookmarksURL is the special URL used to represent the filtered "Bookmarks" view.
+const BookmarksURL = "internal://bookmarks"
+
 // Item represents a single RSS item.
 type Item struct {
 	GUID        string

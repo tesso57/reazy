@@ -40,6 +40,14 @@ func (s ReadingService) FetchFeed(url string, all []string) (*reading.Feed, erro
 	if url == reading.AllFeedsURL {
 		return s.Fetcher.FetchAll(all)
 	}
+	if url == reading.BookmarksURL {
+		// Bookmarks are local, no fetch needed. Return empty feed or nil.
+		return &reading.Feed{
+			Title: "Bookmarks",
+			URL:   reading.BookmarksURL,
+			Items: []reading.Item{},
+		}, nil
+	}
 	return s.Fetcher.Fetch(url)
 }
 
@@ -63,6 +71,17 @@ func (s ReadingService) MergeHistory(history *reading.History, feed *reading.Fee
 		return
 	}
 	history.MergeFeed(feed, s.now())
+}
+
+// ToggleBookmark toggles the bookmark status of an item and persists the change.
+func (s ReadingService) ToggleBookmark(history *reading.History, guid string) error {
+	if history == nil {
+		return nil
+	}
+	if history.ToggleBookmark(guid) {
+		return s.SaveHistory(history)
+	}
+	return nil
 }
 
 func (s ReadingService) now() time.Time {

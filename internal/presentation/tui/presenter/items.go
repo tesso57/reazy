@@ -19,6 +19,7 @@ type Item struct {
 	Published     string
 	GUID          string
 	Read          bool
+	Bookmarked    bool
 	FeedTitleText string
 	FeedURL       string
 }
@@ -35,6 +36,9 @@ func (i *Item) URL() string { return i.Link }
 // IsRead returns the read state.
 func (i *Item) IsRead() bool { return i.Read }
 
+// IsBookmarked returns the bookmarked state.
+func (i *Item) IsBookmarked() bool { return i.Bookmarked }
+
 // FeedTitle returns the feed title for the item.
 func (i *Item) FeedTitle() string { return i.FeedTitleText }
 
@@ -48,10 +52,12 @@ func (i *Item) Description() string {
 
 // BuildFeedListItems builds list items for the feed list.
 func BuildFeedListItems(feeds []string) []list.Item {
-	items := make([]list.Item, len(feeds)+1)
+	items := make([]list.Item, len(feeds)+2)
 	items[0] = &Item{TitleText: "0. * All Feeds", Link: reading.AllFeedsURL}
+	items[1] = &Item{TitleText: "1. * Bookmarks", Link: reading.BookmarksURL}
+
 	for i, f := range feeds {
-		items[i+1] = &Item{TitleText: fmt.Sprintf("%d. %s", i+1, textutil.SingleLine(f)), Link: f}
+		items[i+2] = &Item{TitleText: fmt.Sprintf("%d. %s", i+2, textutil.SingleLine(f)), Link: f}
 	}
 	return items
 }
@@ -76,7 +82,7 @@ func BuildArticleListItems(history *reading.History, feedURL string) []list.Item
 	for i, it := range items {
 		title := textutil.SingleLine(it.Title)
 		feedTitle := textutil.SingleLine(it.FeedTitle)
-		if feedURL == reading.AllFeedsURL && feedTitle != "" {
+		if (feedURL == reading.AllFeedsURL || feedURL == reading.BookmarksURL) && feedTitle != "" {
 			title = fmt.Sprintf("%d. [%s] %s", i+1, feedTitle, title)
 		} else {
 			title = fmt.Sprintf("%d. %s", i+1, title)
@@ -90,6 +96,7 @@ func BuildArticleListItems(history *reading.History, feedURL string) []list.Item
 			Published:     it.Published,
 			GUID:          it.GUID,
 			Read:          it.IsRead,
+			Bookmarked:    it.IsBookmarked,
 			FeedTitleText: it.FeedTitle,
 			FeedURL:       it.FeedURL,
 		}
@@ -100,8 +107,11 @@ func BuildArticleListItems(history *reading.History, feedURL string) []list.Item
 // ApplyArticleList updates the article list and title based on feed URL.
 func ApplyArticleList(model *list.Model, history *reading.History, feedURL string) {
 	model.SetItems(BuildArticleListItems(history, feedURL))
+	model.SetItems(BuildArticleListItems(history, feedURL))
 	if feedURL == reading.AllFeedsURL {
 		model.Title = "All Feeds"
+	} else if feedURL == reading.BookmarksURL {
+		model.Title = "Bookmarks"
 	} else {
 		model.Title = "Articles"
 	}

@@ -17,6 +17,7 @@ type KeyMapConfig struct {
 	AddFeed    string `yaml:"add_feed" kong:"help='Add feed key',default='a'"`
 	DeleteFeed string `yaml:"delete_feed" kong:"help='Delete feed key',default='x'"`
 	Refresh    string `yaml:"refresh" kong:"help='Refresh key',default='r'"`
+	Bookmark   string `yaml:"bookmark" kong:"help='Bookmark key',default='b'"`
 }
 
 // ThemeConfig defines the color theme configuration.

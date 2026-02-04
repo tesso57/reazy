@@ -19,6 +19,7 @@ const (
 	Open
 	Back
 	Refresh
+	Bookmark
 )
 
 // Intent represents a parsed user intent.
@@ -43,6 +44,8 @@ func FromKeyMsg(msg tea.KeyMsg, keys state.KeyMap) Intent {
 		return Intent{Type: Back}
 	case key.Matches(msg, keys.Refresh):
 		return Intent{Type: Refresh}
+	case key.Matches(msg, keys.Bookmark):
+		return Intent{Type: Bookmark}
 	default:
 		return Intent{Type: None}
 	}

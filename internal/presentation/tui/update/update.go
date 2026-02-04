@@ -230,6 +230,16 @@ func handleArticleViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (
 			s.Loading = true
 			return tea.Batch(s.Spinner.Tick, FetchFeedCmd(deps.Reading, s.CurrentFeed.URL, s.Feeds)), true
 		}
+	case intent.Bookmark:
+		if i, ok := s.ArticleList.SelectedItem().(*presenter.Item); ok {
+			_ = deps.Reading.ToggleBookmark(s.History, i.GUID)
+
+			// Update the item in the list immediately
+			idx := s.ArticleList.Index()
+			i.Bookmarked = !i.Bookmarked
+			s.ArticleList.SetItem(idx, i)
+			return nil, true
+		}
 	}
 	return nil, false
 }

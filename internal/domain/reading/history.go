@@ -16,8 +16,9 @@ type HistoryItem struct {
 	FeedTitle   string    `json:"feed_title"`
 	FeedURL     string    `json:"feed_url"`
 
-	IsRead  bool      `json:"is_read"`
-	SavedAt time.Time `json:"saved_at"`
+	IsRead       bool      `json:"is_read"`
+	SavedAt      time.Time `json:"saved_at"`
+	IsBookmarked bool      `json:"is_bookmarked"`
 }
 
 // History holds cached items keyed by GUID.
@@ -94,8 +95,33 @@ func (h *History) MarkRead(guid string) bool {
 	return true
 }
 
+// ToggleBookmark returns true if the item exists and the specific item's state was toggled.
+func (h *History) ToggleBookmark(guid string) bool {
+	item, ok := h.items[guid]
+	if !ok {
+		return false
+	}
+	item.IsBookmarked = !item.IsBookmarked
+	return true
+}
+
+// BookmarkedItems returns all bookmarked items.
+func (h *History) BookmarkedItems() []*HistoryItem {
+	items := make([]*HistoryItem, 0)
+	for _, hItem := range h.items {
+		if hItem.IsBookmarked {
+			items = append(items, hItem)
+		}
+	}
+	return items
+}
+
 // ItemsByFeed returns history items filtered by feed URL.
 func (h *History) ItemsByFeed(feedURL string) []*HistoryItem {
+	if feedURL == BookmarksURL {
+		return h.BookmarkedItems()
+	}
+
 	items := make([]*HistoryItem, 0, len(h.items))
 	for _, hItem := range h.items {
 		if feedURL == AllFeedsURL || hItem.FeedURL == feedURL {

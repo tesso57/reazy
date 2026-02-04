@@ -2,6 +2,7 @@
 package listview
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -14,6 +15,7 @@ type ArticleItem interface {
 	list.Item
 	Title() string
 	IsRead() bool
+	IsBookmarked() bool
 	FeedTitle() string
 }
 
@@ -52,6 +54,11 @@ func (d *ArticleDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	title := i.Title()
+
+	// If Bookmarked, prepend [B]
+	if i.IsBookmarked() {
+		title = fmt.Sprintf("[B] %s", title)
+	}
 
 	style := itemStyle(d.Styles, m, index)
 	title = truncateItemText(m, style, title)

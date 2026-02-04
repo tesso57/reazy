@@ -1,6 +1,7 @@
 package history
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -63,5 +64,22 @@ func TestHistoryManager(t *testing.T) {
 		if !item.IsRead {
 			t.Error("IsRead mismatch for id1")
 		}
+	}
+}
+
+func TestHistoryManager_CreateDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	// path in non-existent subdirectory
+	path := filepath.Join(tmpDir, "subdir", "history.jsonl")
+
+	m := NewManager(path)
+	items := []*reading.HistoryItem{{GUID: "1", Title: "Test"}}
+
+	if err := m.Save(items); err != nil {
+		t.Fatalf("Save should succeed even if subdir missing: %v", err)
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Error("File was not created")
 	}
 }

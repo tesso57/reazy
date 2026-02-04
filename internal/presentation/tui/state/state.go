@@ -36,6 +36,7 @@ type KeyMap struct {
 	AddFeed    key.Binding
 	DeleteFeed key.Binding
 	Refresh    key.Binding
+	Bookmark   key.Binding
 	Help       key.Binding
 }
 
@@ -112,6 +113,10 @@ func NewKeyMap(cfg settings.KeyMapConfig) KeyMap {
 		Refresh: key.NewBinding(
 			key.WithKeys(splitKeys(cfg.Refresh)...),
 			key.WithHelp(cfg.Refresh, "refresh"),
+		),
+		Bookmark: key.NewBinding(
+			key.WithKeys(splitKeys(cfg.Bookmark)...),
+			key.WithHelp(cfg.Bookmark, "bookmark"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),

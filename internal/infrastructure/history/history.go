@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/tesso57/reazy/internal/domain/reading"
@@ -54,6 +55,12 @@ func (m *Manager) Load() (map[string]*reading.HistoryItem, error) {
 func (m *Manager) Save(items []*reading.HistoryItem) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Ensure directory exists
+	dir := filepath.Dir(m.path)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return err
+	}
 
 	f, err := os.Create(m.path)
 	if err != nil {
