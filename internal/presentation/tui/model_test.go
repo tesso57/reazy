@@ -231,8 +231,14 @@ func TestUpdate(t *testing.T) {
 	if m.state.Session != state.DetailView {
 		t.Error("Failed to enter detailView")
 	}
+	if !strings.Contains(m.state.Viewport.View(), "AI Summary") {
+		t.Error("Viewport missing AI Summary section")
+	}
+	if !strings.Contains(m.state.Viewport.View(), "Article Body") {
+		t.Error("Viewport missing Article Body section")
+	}
 	if !strings.Contains(m.state.Viewport.View(), "Desc") {
-		t.Error("Viewport missing content")
+		t.Error("Viewport missing summary content")
 	}
 	// Esc -> Article View
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})

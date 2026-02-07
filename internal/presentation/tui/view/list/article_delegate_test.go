@@ -9,17 +9,18 @@ import (
 
 // MockArticleItem satisfies the ArticleItem interface
 type mockArticleItem struct {
-	title     string
-	isRead    bool
-	hasAI     bool
-	feedTitle string
+	title      string
+	isRead     bool
+	bookmarked bool
+	hasAI      bool
+	feedTitle  string
 }
 
 func (m mockArticleItem) Title() string       { return m.title }
 func (m mockArticleItem) Description() string { return "" }
 func (m mockArticleItem) FilterValue() string { return m.title }
 func (m mockArticleItem) IsRead() bool        { return m.isRead }
-func (m mockArticleItem) IsBookmarked() bool  { return false }
+func (m mockArticleItem) IsBookmarked() bool  { return m.bookmarked }
 func (m mockArticleItem) HasAISummary() bool  { return m.hasAI }
 func (m mockArticleItem) FeedTitle() string   { return m.feedTitle }
 

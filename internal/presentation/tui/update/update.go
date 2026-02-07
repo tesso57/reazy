@@ -363,41 +363,10 @@ func buildInsightRequest(item *presenter.Item) usecase.InsightRequest {
 	}
 }
 
-func detailViewText(item *presenter.Item, showAISummary bool) string {
-	if item == nil {
-		return ""
-	}
-
-	text := item.Content
-	if text == "" {
-		text = item.Desc
-	}
-
-	parts := []string{item.TitleText}
-	if item.AISummary != "" {
-		summaryHeader := "AI Summary"
-		if !item.AIUpdatedAt.IsZero() {
-			summaryHeader = fmt.Sprintf("AI Summary (%s)", item.AIUpdatedAt.Format("2006-01-02 15:04"))
-		}
-		if showAISummary {
-			parts = append(parts, fmt.Sprintf("%s\n%s", summaryHeader, item.AISummary))
-			if len(item.AITags) > 0 {
-				parts = append(parts, fmt.Sprintf("AI Tags: %s", strings.Join(item.AITags, ", ")))
-			}
-		} else {
-			parts = append(parts, fmt.Sprintf("%s\n(hidden; press Shift+S to toggle)", summaryHeader))
-		}
-	}
-	if text != "" {
-		parts = append(parts, text)
-	}
-	return strings.Join(parts, "\n\n")
-}
-
 func refreshDetailViewport(s *state.ModelState, item *presenter.Item) {
 	if s == nil {
 		return
 	}
-	s.Viewport.SetContent(detailViewText(item, s.ShowAISummary))
+	s.Viewport.SetContent(buildDetailContent(item, s.ShowAISummary))
 	s.Viewport.GotoTop()
 }
