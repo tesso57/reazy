@@ -12,7 +12,7 @@ Reazy (Read + Lazy) is a modern, terminal-based RSS/Atom reader built with Go an
 - **Updates**: Pull-to-refresh support.
 - **Read Status**: Tracks read articles and dims them.
 - **All Feeds**: View articles from all feeds in a unified timeline.
-- **Article Preview**: View article summaries directly in the terminal to save time.
+- **AI Summary View**: In the detail screen, AI summary and article body are clearly separated for easier reading.
 
 ## Installation
 
@@ -40,7 +40,7 @@ reazy
   - `k` / `↑`: Up
   - `j` / `↓`: Down
   - `h` / `←`: Back / Focus Feeds
-  - `l` / `→` / `Enter`: View Summary / Open Link
+  - `l` / `→` / `Enter`: View AI Summary + Article Body / Open Link
 - **Actions**:
   - `a`: Add Feed
   - `x`: Delete Feed

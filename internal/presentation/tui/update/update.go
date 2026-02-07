@@ -2,7 +2,6 @@
 package update
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -214,11 +213,7 @@ func handleArticleViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (
 			}
 
 			s.Session = state.DetailView
-			text := i.Content
-			if text == "" {
-				text = i.Desc
-			}
-			s.Viewport.SetContent(fmt.Sprintf("%s\n\n%s", i.TitleText, text))
+			s.Viewport.SetContent(buildDetailContent(i))
 			s.Viewport.GotoTop()
 		}
 		return nil, true

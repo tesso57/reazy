@@ -9,15 +9,17 @@ import (
 
 // MockArticleItem satisfies the ArticleItem interface
 type mockArticleItem struct {
-	title     string
-	isRead    bool
-	feedTitle string
+	title      string
+	isRead     bool
+	bookmarked bool
+	feedTitle  string
 }
 
 func (m mockArticleItem) Title() string       { return m.title }
 func (m mockArticleItem) Description() string { return "" }
 func (m mockArticleItem) FilterValue() string { return m.title }
 func (m mockArticleItem) IsRead() bool        { return m.isRead }
+func (m mockArticleItem) IsBookmarked() bool  { return m.bookmarked }
 func (m mockArticleItem) FeedTitle() string   { return m.feedTitle }
 
 func TestNewArticleDelegate(t *testing.T) {

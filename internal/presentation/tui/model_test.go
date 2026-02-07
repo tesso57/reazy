@@ -33,8 +33,8 @@ func TestNewModel(t *testing.T) {
 	if m.state.Session != state.FeedView {
 		t.Error("Expected initial state to be feedView")
 	}
-	if len(m.state.FeedList.Items()) != 2 { // All Tab + 1 Feed
-		t.Errorf("Expected 2 feed items (All+1), got %d", len(m.state.FeedList.Items()))
+	if len(m.state.FeedList.Items()) != 3 { // All + Bookmarks + 1 Feed
+		t.Errorf("Expected 3 feed items (All+Bookmarks+1), got %d", len(m.state.FeedList.Items()))
 	}
 }
 
@@ -231,8 +231,14 @@ func TestUpdate(t *testing.T) {
 	if m.state.Session != state.DetailView {
 		t.Error("Failed to enter detailView")
 	}
+	if !strings.Contains(m.state.Viewport.View(), "AI Summary") {
+		t.Error("Viewport missing AI Summary section")
+	}
+	if !strings.Contains(m.state.Viewport.View(), "Article Body") {
+		t.Error("Viewport missing Article Body section")
+	}
 	if !strings.Contains(m.state.Viewport.View(), "Desc") {
-		t.Error("Viewport missing content")
+		t.Error("Viewport missing summary content")
 	}
 	// Esc -> Article View
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
