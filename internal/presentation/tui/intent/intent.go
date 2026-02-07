@@ -20,6 +20,8 @@ const (
 	Back
 	Refresh
 	Bookmark
+	Summarize
+	ToggleSummary
 )
 
 // Intent represents a parsed user intent.
@@ -46,6 +48,10 @@ func FromKeyMsg(msg tea.KeyMsg, keys state.KeyMap) Intent {
 		return Intent{Type: Refresh}
 	case key.Matches(msg, keys.Bookmark):
 		return Intent{Type: Bookmark}
+	case key.Matches(msg, keys.Summarize):
+		return Intent{Type: Summarize}
+	case key.Matches(msg, keys.ToggleSummary) || msg.String() == "S":
+		return Intent{Type: ToggleSummary}
 	default:
 		return Intent{Type: None}
 	}

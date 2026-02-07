@@ -2,16 +2,19 @@ package tui
 
 import (
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tesso57/reazy/internal/application/settings"
+	"github.com/tesso57/reazy/internal/application/usecase"
 	"github.com/tesso57/reazy/internal/domain/reading"
 	"github.com/tesso57/reazy/internal/infrastructure/history"
 	"github.com/tesso57/reazy/internal/presentation/tui/presenter"
 	"github.com/tesso57/reazy/internal/presentation/tui/state"
+	"github.com/tesso57/reazy/internal/presentation/tui/update"
 )
 
 // mockFeedItem creates a simple item for testing
@@ -214,5 +217,125 @@ func TestHandleArticleViewKeys_Refresh(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Error("Expected refresh command")
+	}
+}
+
+func TestHandleArticleViewKeys_Summarize(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds:  []string{"http://example.com"},
+		KeyMap: settings.KeyMapConfig{Summarize: "s", ToggleSummary: "S"},
+	}
+	m := newTestModelWithInsightGenerator(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{}, stubInsightGenerator{
+		insight: usecase.Insight{
+			Summary: "AI generated summary",
+			Tags:    []string{"go", "rss"},
+		},
+	})
+
+	guid := "guid-1"
+	m.state.History.Items()[guid] = &reading.HistoryItem{
+		GUID:  guid,
+		Title: "Article title",
+	}
+	m.state.Session = state.ArticleView
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{
+			RawTitle:  "Article title",
+			TitleText: "1. Article title",
+			GUID:      guid,
+			Content:   "Body text",
+		},
+	})
+	m.state.ArticleList.Select(0)
+
+	tm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m = tm.(*Model)
+	if !m.state.Loading {
+		t.Fatal("Expected loading state while insight generation runs")
+	}
+	if cmd == nil {
+		t.Fatal("Expected insight command")
+	}
+
+	tm, _ = m.Update(update.InsightGeneratedMsg{
+		GUID: guid,
+		Insight: usecase.Insight{
+			Summary: "AI generated summary",
+			Tags:    []string{"go", "rss"},
+		},
+	})
+	m = tm.(*Model)
+
+	if m.state.Loading {
+		t.Fatal("Expected loading to stop after insight result")
+	}
+	item, _ := m.state.History.Item(guid)
+	if item == nil || item.AISummary != "AI generated summary" {
+		t.Fatalf("History insight not updated: %#v", item)
+	}
+	listItem := m.state.ArticleList.Items()[0].(*presenter.Item)
+	if listItem.AISummary != "AI generated summary" {
+		t.Fatalf("List item summary = %q, want AI summary", listItem.AISummary)
+	}
+}
+
+func TestHandleDetailViewKeys_Summarize(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds:  []string{"http://example.com"},
+		KeyMap: settings.KeyMapConfig{Summarize: "s"},
+	}
+	m := newTestModelWithInsightGenerator(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{}, stubInsightGenerator{
+		insight: usecase.Insight{
+			Summary: "Detail AI summary",
+			Tags:    []string{"tag1", "tag2"},
+		},
+	})
+
+	guid := "guid-2"
+	m.state.History.Items()[guid] = &reading.HistoryItem{
+		GUID:  guid,
+		Title: "Detail article",
+	}
+	m.state.Session = state.DetailView
+	m.state.Viewport.Width = 80
+	m.state.Viewport.Height = 20
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{
+			RawTitle:  "Detail article",
+			TitleText: "1. Detail article",
+			GUID:      guid,
+			Content:   "Body text",
+		},
+	})
+	m.state.ArticleList.Select(0)
+
+	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m = tm.(*Model)
+	if !m.state.Loading {
+		t.Fatal("Expected loading state in detail view summarize")
+	}
+
+	tm, _ = m.Update(update.InsightGeneratedMsg{
+		GUID: guid,
+		Insight: usecase.Insight{
+			Summary: "Detail AI summary",
+			Tags:    []string{"tag1", "tag2"},
+		},
+	})
+	m = tm.(*Model)
+	if m.state.Loading {
+		t.Fatal("Expected loading false after insight result")
+	}
+	if !strings.Contains(m.state.Viewport.View(), "AI Summary") {
+		t.Fatalf("Viewport should include AI summary section, got: %s", m.state.Viewport.View())
+	}
+	if !strings.Contains(m.state.AIStatus, "AI: updated") {
+		t.Fatalf("Expected AI status update message, got %q", m.state.AIStatus)
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'S'}})
+	m = tm.(*Model)
+	if !strings.Contains(m.state.Viewport.View(), "(hidden; press Shift+S to toggle)") {
+		t.Fatalf("Viewport should indicate hidden summary, got: %s", m.state.Viewport.View())
 	}
 }

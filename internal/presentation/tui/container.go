@@ -88,7 +88,11 @@ func (m *Model) buildMainProps() main_view.Props {
 	var body string
 	switch {
 	case m.state.Loading:
-		body = fmt.Sprintf("\n\n   %s Loading feed...", m.state.Spinner.View())
+		message := "Loading feed..."
+		if m.state.AIStatus != "" {
+			message = m.state.AIStatus
+		}
+		body = fmt.Sprintf("\n\n   %s %s", m.state.Spinner.View(), message)
 	case m.state.Session == state.DetailView:
 		body = m.state.Viewport.View()
 	case m.state.Session == state.ArticleView || m.state.Session == state.FeedView:
@@ -98,6 +102,9 @@ func (m *Model) buildMainProps() main_view.Props {
 	}
 	if m.state.Err != nil && (m.state.Session == state.ArticleView || m.state.Session == state.FeedView) && !m.state.Loading {
 		body = fmt.Sprintf("Error: %v\n\n%s", m.state.Err, body)
+	}
+	if m.state.AIStatus != "" && (m.state.Session == state.ArticleView || m.state.Session == state.DetailView) && !m.state.Loading {
+		body = fmt.Sprintf("%s\n\n%s", m.state.AIStatus, body)
 	}
 
 	headerHeight := 0

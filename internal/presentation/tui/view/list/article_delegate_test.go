@@ -11,6 +11,7 @@ import (
 type mockArticleItem struct {
 	title     string
 	isRead    bool
+	hasAI     bool
 	feedTitle string
 }
 
@@ -18,6 +19,8 @@ func (m mockArticleItem) Title() string       { return m.title }
 func (m mockArticleItem) Description() string { return "" }
 func (m mockArticleItem) FilterValue() string { return m.title }
 func (m mockArticleItem) IsRead() bool        { return m.isRead }
+func (m mockArticleItem) IsBookmarked() bool  { return false }
+func (m mockArticleItem) HasAISummary() bool  { return m.hasAI }
 func (m mockArticleItem) FeedTitle() string   { return m.feedTitle }
 
 func TestNewArticleDelegate(t *testing.T) {
@@ -74,6 +77,13 @@ func TestArticleDelegate_Render(t *testing.T) {
 			// Note: We can't easily assert color/style with plain string check,
 			// but we can check the content is present.
 			// Faint style usually adds ANSI codes.
+		},
+		{
+			name:     "AI Item",
+			item:     mockArticleItem{title: "AI Article", hasAI: true},
+			index:    0,
+			mdlIndex: 1,
+			contains: "[AI] AI Article",
 		},
 		{
 			name:     "Selected Item",

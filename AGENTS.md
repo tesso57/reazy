@@ -18,6 +18,7 @@ This document provides context for AI agents working on the Reazy codebase.
 - `internal/infrastructure/config`: Configuration storage using `kong` and `yaml.v3`.
 - `internal/infrastructure/feed`: RSS parsing logic wrapping `gofeed`.
 - `internal/infrastructure/history`: Read-history persistence using JSONL.
+- `internal/infrastructure/ai`: AI provider abstraction and concrete clients.
 - `internal/presentation/tui`: Bubble Tea Model and View logic.
 - `internal/presentation/tui/state`: UI state types.
 - `internal/presentation/tui/intent`: Input intent parsing.
@@ -41,6 +42,7 @@ This document provides context for AI agents working on the Reazy codebase.
 ## Key Design Decisions
 - **Configuration**: Uses `alecthomas/kong` for configuration parsing and defaults, with a custom YAML loader. Settings are loaded via infrastructure store and passed explicitly.
 - **Dependency Injection**: Use variables like `feed.ParserFunc` to mock external dependencies (network calls) in tests.
+- **AI Insights**: Insight generation belongs to Application usecases and depends on abstract text-generation clients. Infrastructure only provides concrete AI clients (currently Codex CLI via `codex.*` config).
 
 ## Tools
 - `xc`: Task runner. Use `xc [task]` to run predefined tasks.

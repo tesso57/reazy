@@ -19,6 +19,9 @@ type HistoryItem struct {
 	IsRead       bool      `json:"is_read"`
 	SavedAt      time.Time `json:"saved_at"`
 	IsBookmarked bool      `json:"is_bookmarked"`
+	AISummary    string    `json:"ai_summary,omitempty"`
+	AITags       []string  `json:"ai_tags,omitempty"`
+	AIUpdatedAt  time.Time `json:"ai_updated_at,omitempty"`
 }
 
 // History holds cached items keyed by GUID.
@@ -95,6 +98,12 @@ func (h *History) MarkRead(guid string) bool {
 	return true
 }
 
+// Item returns a history item by GUID.
+func (h *History) Item(guid string) (*HistoryItem, bool) {
+	item, ok := h.items[guid]
+	return item, ok
+}
+
 // ToggleBookmark returns true if the item exists and the specific item's state was toggled.
 func (h *History) ToggleBookmark(guid string) bool {
 	item, ok := h.items[guid]
@@ -102,6 +111,18 @@ func (h *History) ToggleBookmark(guid string) bool {
 		return false
 	}
 	item.IsBookmarked = !item.IsBookmarked
+	return true
+}
+
+// SetInsight sets AI-generated insight fields for an item.
+func (h *History) SetInsight(guid, summary string, tags []string, updatedAt time.Time) bool {
+	item, ok := h.items[guid]
+	if !ok {
+		return false
+	}
+	item.AISummary = summary
+	item.AITags = append(item.AITags[:0], tags...)
+	item.AIUpdatedAt = updatedAt
 	return true
 }
 

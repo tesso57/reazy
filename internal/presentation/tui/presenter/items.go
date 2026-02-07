@@ -4,6 +4,8 @@ package presenter
 import (
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/tesso57/reazy/internal/domain/reading"
@@ -13,6 +15,7 @@ import (
 // Item is a view model for list items.
 type Item struct {
 	TitleText     string
+	RawTitle      string
 	Desc          string
 	Content       string
 	Link          string
@@ -20,6 +23,9 @@ type Item struct {
 	GUID          string
 	Read          bool
 	Bookmarked    bool
+	AISummary     string
+	AITags        []string
+	AIUpdatedAt   time.Time
 	FeedTitleText string
 	FeedURL       string
 }
@@ -39,6 +45,9 @@ func (i *Item) IsRead() bool { return i.Read }
 // IsBookmarked returns the bookmarked state.
 func (i *Item) IsBookmarked() bool { return i.Bookmarked }
 
+// HasAISummary returns true when AI summary is available.
+func (i *Item) HasAISummary() bool { return strings.TrimSpace(i.AISummary) != "" }
+
 // FeedTitle returns the feed title for the item.
 func (i *Item) FeedTitle() string { return i.FeedTitleText }
 
@@ -53,11 +62,11 @@ func (i *Item) Description() string {
 // BuildFeedListItems builds list items for the feed list.
 func BuildFeedListItems(feeds []string) []list.Item {
 	items := make([]list.Item, len(feeds)+2)
-	items[0] = &Item{TitleText: "0. * All Feeds", Link: reading.AllFeedsURL}
-	items[1] = &Item{TitleText: "1. * Bookmarks", Link: reading.BookmarksURL}
+	items[0] = &Item{TitleText: "0. * All Feeds", RawTitle: "All Feeds", Link: reading.AllFeedsURL}
+	items[1] = &Item{TitleText: "1. * Bookmarks", RawTitle: "Bookmarks", Link: reading.BookmarksURL}
 
 	for i, f := range feeds {
-		items[i+2] = &Item{TitleText: fmt.Sprintf("%d. %s", i+2, textutil.SingleLine(f)), Link: f}
+		items[i+2] = &Item{TitleText: fmt.Sprintf("%d. %s", i+2, textutil.SingleLine(f)), RawTitle: f, Link: f}
 	}
 	return items
 }
@@ -90,6 +99,7 @@ func BuildArticleListItems(history *reading.History, feedURL string) []list.Item
 
 		result[i] = &Item{
 			TitleText:     title,
+			RawTitle:      it.Title,
 			Desc:          it.Description,
 			Content:       it.Content,
 			Link:          it.Link,
@@ -97,6 +107,9 @@ func BuildArticleListItems(history *reading.History, feedURL string) []list.Item
 			GUID:          it.GUID,
 			Read:          it.IsRead,
 			Bookmarked:    it.IsBookmarked,
+			AISummary:     it.AISummary,
+			AITags:        append([]string(nil), it.AITags...),
+			AIUpdatedAt:   it.AIUpdatedAt,
 			FeedTitleText: it.FeedTitle,
 			FeedURL:       it.FeedURL,
 		}

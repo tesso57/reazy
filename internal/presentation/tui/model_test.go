@@ -33,8 +33,8 @@ func TestNewModel(t *testing.T) {
 	if m.state.Session != state.FeedView {
 		t.Error("Expected initial state to be feedView")
 	}
-	if len(m.state.FeedList.Items()) != 2 { // All Tab + 1 Feed
-		t.Errorf("Expected 2 feed items (All+1), got %d", len(m.state.FeedList.Items()))
+	if len(m.state.FeedList.Items()) != 3 { // All + Bookmarks + 1 Feed
+		t.Errorf("Expected 3 feed items (All+Bookmarks+1), got %d", len(m.state.FeedList.Items()))
 	}
 }
 
@@ -566,4 +566,7 @@ func TestHistoryIntegration(t *testing.T) {
 	if m.state.Session != state.DetailView {
 		t.Error("Should enter detail view")
 	}
+
+	// Wait for async history saves.
+	time.Sleep(100 * time.Millisecond)
 }

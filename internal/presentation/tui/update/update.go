@@ -2,8 +2,10 @@
 package update
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +20,7 @@ import (
 type Deps struct {
 	Subscriptions usecase.SubscriptionService
 	Reading       usecase.ReadingService
+	Insights      usecase.InsightService
 	OpenBrowser   func(string) error
 }
 
@@ -28,6 +31,13 @@ type FeedFetchedMsg struct {
 	URL  string
 }
 
+// InsightGeneratedMsg is emitted after generating AI insight for an article.
+type InsightGeneratedMsg struct {
+	GUID    string
+	Insight usecase.Insight
+	Err     error
+}
+
 // FetchFeedCmd creates a command to fetch feeds using the reading service.
 func FetchFeedCmd(readingSvc usecase.ReadingService, url string, feeds []string) tea.Cmd {
 	allFeeds := append([]string(nil), feeds...)
@@ -35,6 +45,18 @@ func FetchFeedCmd(readingSvc usecase.ReadingService, url string, feeds []string)
 	return func() tea.Msg {
 		f, err := readingSvc.FetchFeed(trimmed, allFeeds)
 		return FeedFetchedMsg{Feed: f, Err: err, URL: trimmed}
+	}
+}
+
+// GenerateInsightCmd creates a command to generate AI summary/tags for one article.
+func GenerateInsightCmd(insightSvc usecase.InsightService, guid string, req usecase.InsightRequest) tea.Cmd {
+	return func() tea.Msg {
+		insight, err := insightSvc.Generate(context.Background(), req)
+		return InsightGeneratedMsg{
+			GUID:    guid,
+			Insight: insight,
+			Err:     err,
+		}
 	}
 }
 
@@ -100,6 +122,43 @@ func HandleFeedFetchedMsg(s *state.ModelState, msg FeedFetchedMsg, deps Deps) {
 		s.CurrentFeed = msg.Feed
 		presenter.ApplyArticleList(&s.ArticleList, s.History, msg.URL)
 		UpdateListSizes(s)
+	}
+}
+
+// HandleInsightGeneratedMsg applies AI-generated summary/tags to history and visible items.
+func HandleInsightGeneratedMsg(s *state.ModelState, msg InsightGeneratedMsg, deps Deps) {
+	s.Loading = false
+	if msg.Err != nil {
+		s.AIStatus = fmt.Sprintf("AI: generation failed (%s)", strings.TrimSpace(msg.Err.Error()))
+		return
+	}
+
+	if !deps.Insights.ApplyToHistory(s.History, msg.GUID, msg.Insight) {
+		s.AIStatus = "AI: failed to attach generated insight"
+		return
+	}
+
+	go func() { _ = deps.Reading.SaveHistory(s.History) }()
+
+	updatedAt := time.Now()
+	if item, ok := s.History.Item(msg.GUID); ok && !item.AIUpdatedAt.IsZero() {
+		updatedAt = item.AIUpdatedAt
+	}
+	s.AIStatus = fmt.Sprintf("AI: updated %s", updatedAt.Format("2006-01-02 15:04"))
+
+	for idx, listItem := range s.ArticleList.Items() {
+		item, ok := listItem.(*presenter.Item)
+		if !ok || item.GUID != msg.GUID {
+			continue
+		}
+		item.AISummary = msg.Insight.Summary
+		item.AITags = append([]string(nil), msg.Insight.Tags...)
+		item.AIUpdatedAt = updatedAt
+		s.ArticleList.SetItem(idx, item)
+		if s.Session == state.DetailView && s.ArticleList.Index() == idx {
+			refreshDetailViewport(s, item)
+		}
+		break
 	}
 }
 
@@ -214,12 +273,7 @@ func handleArticleViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (
 			}
 
 			s.Session = state.DetailView
-			text := i.Content
-			if text == "" {
-				text = i.Desc
-			}
-			s.Viewport.SetContent(fmt.Sprintf("%s\n\n%s", i.TitleText, text))
-			s.Viewport.GotoTop()
+			refreshDetailViewport(s, i)
 		}
 		return nil, true
 	case intent.ToggleHelp:
@@ -240,6 +294,19 @@ func handleArticleViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (
 			s.ArticleList.SetItem(idx, i)
 			return nil, true
 		}
+	case intent.Summarize:
+		if i, ok := s.ArticleList.SelectedItem().(*presenter.Item); ok {
+			s.Loading = true
+			s.Err = nil
+			s.AIStatus = "AI: generating summary and tags..."
+			return tea.Batch(
+				s.Spinner.Tick,
+				GenerateInsightCmd(deps.Insights, i.GUID, buildInsightRequest(i)),
+			), true
+		}
+		return nil, true
+	case intent.ToggleSummary:
+		return nil, true
 	}
 	return nil, false
 }
@@ -257,6 +324,80 @@ func handleDetailViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (t
 	case intent.ToggleHelp:
 		s.Help.ShowAll = !s.Help.ShowAll
 		return nil, true
+	case intent.Summarize:
+		if i, ok := s.ArticleList.SelectedItem().(*presenter.Item); ok {
+			s.Loading = true
+			s.Err = nil
+			s.AIStatus = "AI: generating summary and tags..."
+			return tea.Batch(
+				s.Spinner.Tick,
+				GenerateInsightCmd(deps.Insights, i.GUID, buildInsightRequest(i)),
+			), true
+		}
+		return nil, true
+	case intent.ToggleSummary:
+		s.ShowAISummary = !s.ShowAISummary
+		if i, ok := s.ArticleList.SelectedItem().(*presenter.Item); ok {
+			refreshDetailViewport(s, i)
+		}
+		return nil, true
 	}
 	return nil, false
+}
+
+func buildInsightRequest(item *presenter.Item) usecase.InsightRequest {
+	if item == nil {
+		return usecase.InsightRequest{}
+	}
+	title := item.RawTitle
+	if title == "" {
+		title = item.TitleText
+	}
+	return usecase.InsightRequest{
+		Title:       title,
+		Description: item.Desc,
+		Content:     item.Content,
+		Link:        item.Link,
+		Published:   item.Published,
+		FeedTitle:   item.FeedTitleText,
+	}
+}
+
+func detailViewText(item *presenter.Item, showAISummary bool) string {
+	if item == nil {
+		return ""
+	}
+
+	text := item.Content
+	if text == "" {
+		text = item.Desc
+	}
+
+	parts := []string{item.TitleText}
+	if item.AISummary != "" {
+		summaryHeader := "AI Summary"
+		if !item.AIUpdatedAt.IsZero() {
+			summaryHeader = fmt.Sprintf("AI Summary (%s)", item.AIUpdatedAt.Format("2006-01-02 15:04"))
+		}
+		if showAISummary {
+			parts = append(parts, fmt.Sprintf("%s\n%s", summaryHeader, item.AISummary))
+			if len(item.AITags) > 0 {
+				parts = append(parts, fmt.Sprintf("AI Tags: %s", strings.Join(item.AITags, ", ")))
+			}
+		} else {
+			parts = append(parts, fmt.Sprintf("%s\n(hidden; press Shift+S to toggle)", summaryHeader))
+		}
+	}
+	if text != "" {
+		parts = append(parts, text)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func refreshDetailViewport(s *state.ModelState, item *presenter.Item) {
+	if s == nil {
+		return
+	}
+	s.Viewport.SetContent(detailViewText(item, s.ShowAISummary))
+	s.Viewport.GotoTop()
 }

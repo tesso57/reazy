@@ -22,22 +22,24 @@ const (
 
 // KeyMap defines the keybindings for the application.
 type KeyMap struct {
-	Up         key.Binding
-	Down       key.Binding
-	Left       key.Binding
-	Right      key.Binding
-	UpPage     key.Binding
-	DownPage   key.Binding
-	Top        key.Binding
-	Bottom     key.Binding
-	Open       key.Binding
-	Back       key.Binding
-	Quit       key.Binding
-	AddFeed    key.Binding
-	DeleteFeed key.Binding
-	Refresh    key.Binding
-	Bookmark   key.Binding
-	Help       key.Binding
+	Up            key.Binding
+	Down          key.Binding
+	Left          key.Binding
+	Right         key.Binding
+	UpPage        key.Binding
+	DownPage      key.Binding
+	Top           key.Binding
+	Bottom        key.Binding
+	Open          key.Binding
+	Back          key.Binding
+	Quit          key.Binding
+	AddFeed       key.Binding
+	DeleteFeed    key.Binding
+	Refresh       key.Binding
+	Bookmark      key.Binding
+	Summarize     key.Binding
+	ToggleSummary key.Binding
+	Help          key.Binding
 }
 
 // ShortHelp returns a subset of keybindings for the help view.
@@ -51,7 +53,8 @@ func (k *KeyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.Left, k.Right},
 		{k.Top, k.Bottom, k.UpPage, k.DownPage},
 		{k.Open, k.Back, k.Quit},
-		{k.AddFeed, k.DeleteFeed, k.Refresh, k.Help},
+		{k.AddFeed, k.DeleteFeed, k.Refresh, k.Bookmark},
+		{k.Summarize, k.ToggleSummary, k.Help},
 	}
 }
 
@@ -117,6 +120,14 @@ func NewKeyMap(cfg settings.KeyMapConfig) KeyMap {
 		Bookmark: key.NewBinding(
 			key.WithKeys(splitKeys(cfg.Bookmark)...),
 			key.WithHelp(cfg.Bookmark, "bookmark"),
+		),
+		Summarize: key.NewBinding(
+			key.WithKeys(splitKeys(cfg.Summarize)...),
+			key.WithHelp(cfg.Summarize, "ai summary"),
+		),
+		ToggleSummary: key.NewBinding(
+			key.WithKeys(splitKeys(cfg.ToggleSummary)...),
+			key.WithHelp(cfg.ToggleSummary, "toggle summary"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),

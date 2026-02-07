@@ -23,15 +23,22 @@ type Model struct {
 	settings      settings.Settings
 	subscriptions usecase.SubscriptionService
 	reading       usecase.ReadingService
+	insights      usecase.InsightService
 	state         *state.ModelState
 }
 
 // NewModel creates a new application model.
 func NewModel(cfg settings.Settings, subscriptions usecase.SubscriptionService, readingSvc usecase.ReadingService) *Model {
+	return NewModelWithInsights(cfg, subscriptions, readingSvc, usecase.NewInsightService(nil, nil))
+}
+
+// NewModelWithInsights creates a new application model with AI insights support.
+func NewModelWithInsights(cfg settings.Settings, subscriptions usecase.SubscriptionService, readingSvc usecase.ReadingService, insightSvc usecase.InsightService) *Model {
 	return &Model{
 		settings:      cfg,
 		subscriptions: subscriptions,
 		reading:       readingSvc,
+		insights:      insightSvc,
 		state:         newModelState(cfg, readingSvc),
 	}
 }
@@ -56,6 +63,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		update.HandleWindowSize(m.state, msg)
 	case update.FeedFetchedMsg:
 		update.HandleFeedFetchedMsg(m.state, msg, m.deps())
+	case update.InsightGeneratedMsg:
+		update.HandleInsightGeneratedMsg(m.state, msg, m.deps())
 	}
 
 	if m.state.Loading {
@@ -102,22 +111,24 @@ func (m *Model) deps() update.Deps {
 	return update.Deps{
 		Subscriptions: m.subscriptions,
 		Reading:       m.reading,
+		Insights:      m.insights,
 		OpenBrowser:   openBrowser,
 	}
 }
 
 func newModelState(cfg settings.Settings, readingSvc usecase.ReadingService) *state.ModelState {
 	st := &state.ModelState{
-		Session:     state.FeedView,
-		FeedList:    newFeedList(cfg),
-		ArticleList: newArticleList(),
-		TextInput:   newTextInput(),
-		Viewport:    newViewport(),
-		Help:        help.New(),
-		Spinner:     newSpinner(),
-		Keys:        state.NewKeyMap(cfg.KeyMap),
-		History:     loadHistory(readingSvc),
-		Feeds:       append([]string(nil), cfg.Feeds...),
+		Session:       state.FeedView,
+		FeedList:      newFeedList(cfg),
+		ArticleList:   newArticleList(),
+		TextInput:     newTextInput(),
+		Viewport:      newViewport(),
+		Help:          help.New(),
+		Spinner:       newSpinner(),
+		Keys:          state.NewKeyMap(cfg.KeyMap),
+		History:       loadHistory(readingSvc),
+		Feeds:         append([]string(nil), cfg.Feeds...),
+		ShowAISummary: true,
 	}
 
 	st.FeedList.KeyMap.PrevPage = st.Keys.UpPage

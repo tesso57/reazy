@@ -29,6 +29,21 @@ func TestLoad_Defaults(t *testing.T) {
 	if store.Settings.Theme.FeedName != "244" {
 		t.Errorf("Expected default Theme.FeedName '244', got '%s'", store.Settings.Theme.FeedName)
 	}
+	if store.Settings.KeyMap.Summarize != "s" {
+		t.Errorf("Expected default KeyMap.Summarize 's', got %q", store.Settings.KeyMap.Summarize)
+	}
+	if store.Settings.KeyMap.ToggleSummary != "S" {
+		t.Errorf("Expected default KeyMap.ToggleSummary 'S', got %q", store.Settings.KeyMap.ToggleSummary)
+	}
+	if store.Settings.Codex.Command != "codex" {
+		t.Errorf("Expected default Codex.Command 'codex', got %q", store.Settings.Codex.Command)
+	}
+	if store.Settings.Codex.WebSearch != "disabled" {
+		t.Errorf("Expected default Codex.WebSearch 'disabled', got %q", store.Settings.Codex.WebSearch)
+	}
+	if store.Settings.Codex.TimeoutSeconds != 30 {
+		t.Errorf("Expected default Codex.TimeoutSeconds 30, got %d", store.Settings.Codex.TimeoutSeconds)
+	}
 
 	// Verify file was created
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {

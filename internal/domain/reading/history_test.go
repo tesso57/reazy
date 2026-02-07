@@ -1,6 +1,9 @@
 package reading
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestHistory_ToggleBookmark(t *testing.T) {
 	tests := []struct {
@@ -88,5 +91,35 @@ func TestHistory_ItemsByFeed(t *testing.T) {
 				t.Errorf("ItemsByFeed(%q) count = %d, want %d", tt.feedURL, len(got), tt.wantCount)
 			}
 		})
+	}
+}
+
+func TestHistory_SetInsight(t *testing.T) {
+	now := time.Date(2026, 2, 5, 12, 0, 0, 0, time.UTC)
+	h := NewHistory(map[string]*HistoryItem{
+		"1": {GUID: "1"},
+	})
+
+	ok := h.SetInsight("1", "short summary", []string{"go", "rss"}, now)
+	if !ok {
+		t.Fatal("SetInsight should return true for existing item")
+	}
+
+	item, exists := h.Item("1")
+	if !exists {
+		t.Fatal("Item should exist")
+	}
+	if item.AISummary != "short summary" {
+		t.Fatalf("AISummary = %q, want %q", item.AISummary, "short summary")
+	}
+	if len(item.AITags) != 2 || item.AITags[0] != "go" || item.AITags[1] != "rss" {
+		t.Fatalf("AITags = %#v, want [go rss]", item.AITags)
+	}
+	if !item.AIUpdatedAt.Equal(now) {
+		t.Fatalf("AIUpdatedAt = %v, want %v", item.AIUpdatedAt, now)
+	}
+
+	if h.SetInsight("missing", "x", nil, now) {
+		t.Fatal("SetInsight should return false for missing item")
 	}
 }

@@ -12,20 +12,22 @@ import (
 
 // ModelState holds the presentation state for the TUI.
 type ModelState struct {
-	Session      Session
-	FeedList     list.Model
-	ArticleList  list.Model
-	TextInput    textinput.Model
-	Viewport     viewport.Model
-	Help         help.Model
-	Spinner      spinner.Model
-	Loading      bool
-	Keys         KeyMap
-	Width        int
-	Height       int
-	CurrentFeed  *reading.Feed
-	Err          error
-	Previous     Session
-	History      *reading.History
-	Feeds        []string
+	Session       Session
+	FeedList      list.Model
+	ArticleList   list.Model
+	TextInput     textinput.Model
+	Viewport      viewport.Model
+	Help          help.Model
+	Spinner       spinner.Model
+	Loading       bool
+	Keys          KeyMap
+	Width         int
+	Height        int
+	CurrentFeed   *reading.Feed
+	Err           error
+	AIStatus      string
+	ShowAISummary bool
+	Previous      Session
+	History       *reading.History
+	Feeds         []string
 }

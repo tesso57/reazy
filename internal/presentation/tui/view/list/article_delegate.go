@@ -16,6 +16,7 @@ type ArticleItem interface {
 	Title() string
 	IsRead() bool
 	IsBookmarked() bool
+	HasAISummary() bool
 	FeedTitle() string
 }
 
@@ -58,6 +59,9 @@ func (d *ArticleDelegate) Render(w io.Writer, m list.Model, index int, item list
 	// If Bookmarked, prepend [B]
 	if i.IsBookmarked() {
 		title = fmt.Sprintf("[B] %s", title)
+	}
+	if i.HasAISummary() {
+		title = fmt.Sprintf("[AI] %s", title)
 	}
 
 	style := itemStyle(d.Styles, m, index)

@@ -28,7 +28,7 @@ Presentation層はユーザー入力を解釈し、画面状態を更新し、Ap
 
 #### Application
 Application層はユースケースの流れを組み立て、Domainを使って処理の手順を表現する。
-- `internal/application/usecase/`: UIが呼び出すユースケース（購読操作・取得・履歴反映）。
+- `internal/application/usecase/`: UIが呼び出すユースケース（購読操作・取得・履歴反映・AI要約/タグ生成）と、AI要約/タグ向けのプロンプト生成・応答パースを扱う。
 - `internal/application/settings/`: 設定値の型（keymap/theme/feeds など）。
 
 #### Domain
@@ -41,6 +41,7 @@ Infrastructure層は外部I/Oや永続化の実装を提供し、Application/Dom
 - `internal/infrastructure/feed/`: RSS取得・パース（gofeed）。
 - `internal/infrastructure/history/`: 履歴の永続化（JSONL）。
 - `internal/infrastructure/config/`: 設定の読み書き（kong + yaml）。
+- `internal/infrastructure/ai/`: AIプロバイダ連携の抽象化と実装（例: Codex CLI）。
 
 ### ディレクトリ構造
 ```
@@ -62,6 +63,8 @@ internal/
     usecase/
       reading.go
       subscription.go
+      insight.go
+      insight_generator.go
 
   infrastructure/
     feed/
@@ -70,6 +73,9 @@ internal/
       config.go
     history/
       history.go
+    ai/
+      codexcli/
+        client.go
 
   presentation/
     tui/
@@ -128,6 +134,12 @@ UIに表示             Reducer (State update)
   - State: detailView
   - Command: MarkRead + SaveHistory
   - State更新 → 記事一覧再構築 → Render
+- AI要約/タグ生成
+  - Intent: Summarize
+  - State: loading=true
+  - Command: GenerateInsight(AI client abstraction -> Codex subprocess)
+  - Msg: InsightGenerated
+  - State更新（History + 記事表示）→ SaveHistory → Render
 
 ### Migration Guide (v0 -> v1)
 移行を段階化して、動作を維持しながら責務を分離していくためのガイドです。

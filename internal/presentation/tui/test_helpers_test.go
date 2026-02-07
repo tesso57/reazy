@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/tesso57/reazy/internal/application/settings"
@@ -68,8 +69,30 @@ func (s stubFeedFetcher) FetchAll(_ []string) (*reading.Feed, error) {
 	return s.feed, s.err
 }
 
+type stubInsightGenerator struct {
+	insight usecase.Insight
+	err     error
+}
+
+func (s stubInsightGenerator) Generate(_ context.Context, _ usecase.InsightRequest) (usecase.Insight, error) {
+	return s.insight, s.err
+}
+
 func newTestModel(cfg settings.Settings, subsRepo usecase.SubscriptionRepository, historyRepo usecase.HistoryRepository, fetcher usecase.FeedFetcher) *Model {
 	subs := usecase.NewSubscriptionService(subsRepo)
 	readingSvc := usecase.NewReadingService(fetcher, historyRepo, nil)
 	return NewModel(cfg, subs, readingSvc)
+}
+
+func newTestModelWithInsightGenerator(
+	cfg settings.Settings,
+	subsRepo usecase.SubscriptionRepository,
+	historyRepo usecase.HistoryRepository,
+	fetcher usecase.FeedFetcher,
+	insightGen usecase.InsightGenerator,
+) *Model {
+	subs := usecase.NewSubscriptionService(subsRepo)
+	readingSvc := usecase.NewReadingService(fetcher, historyRepo, nil)
+	insightSvc := usecase.NewInsightService(insightGen, nil)
+	return NewModelWithInsights(cfg, subs, readingSvc, insightSvc)
 }

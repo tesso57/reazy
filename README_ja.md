@@ -13,6 +13,7 @@ Reazy (Read + Lazy) は、Go と Bubble Tea で構築されたモダンなター
 - **既読管理**: 読んだ記事を追跡し、薄く表示します。
 - **全フィード表示**: 全てのフィードの記事を一つのタイムラインで表示します。
 - **記事プレビュー**: ブラウザを開く前に、ターミナル内で記事の要約を確認できます。
+- **AI インサイト（任意）**: Codex CLI を使って記事の要約とタグを生成できます。
 
 ## インストール
 
@@ -45,6 +46,9 @@ reazy
   - `a`: フィードを追加
   - `x`: フィードを削除
   - `r`: フィードを更新
+  - `b`: ブックマーク切り替え
+  - `s`: AI 要約/タグを生成
+  - `S`: AI要約の表示/非表示を切り替え（詳細画面）
   - `?`: ヘルプの切り替え
   - `q`: 終了
 
@@ -60,7 +64,29 @@ keymap:
   up: k
   down: j
   ...
+codex:
+  enabled: false
+  command: codex
+  model: gpt-5
+  web_search: disabled
+  reasoning_effort: low
+  reasoning_summary: none
+  verbosity: low
+  timeout_seconds: 30
+  sandbox: read-only
 ```
+
+### Codex 連携（任意）
+Codex CLI がインストール済み・ログイン済みなら、次の設定で有効化できます。
+
+```yaml
+codex:
+  enabled: true
+```
+
+記事一覧/詳細画面で `s` キーを押すと、以下を生成します。
+- 簡潔な要約
+- トピックタグ
 
 ## 類似のプロジェクト
 他にもRSSリーダーが存在します:
