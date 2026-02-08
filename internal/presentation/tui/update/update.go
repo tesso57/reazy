@@ -295,16 +295,7 @@ func handleArticleViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (
 			return nil, true
 		}
 	case intent.Summarize:
-		if i, ok := s.ArticleList.SelectedItem().(*presenter.Item); ok {
-			s.Loading = true
-			s.Err = nil
-			s.AIStatus = "AI: generating summary and tags..."
-			return tea.Batch(
-				s.Spinner.Tick,
-				GenerateInsightCmd(deps.Insights, i.GUID, buildInsightRequest(i)),
-			), true
-		}
-		return nil, true
+		return startInsightGenerationForSelection(s, deps), true
 	case intent.ToggleSummary:
 		return nil, true
 	}
@@ -325,16 +316,7 @@ func handleDetailViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (t
 		s.Help.ShowAll = !s.Help.ShowAll
 		return nil, true
 	case intent.Summarize:
-		if i, ok := s.ArticleList.SelectedItem().(*presenter.Item); ok {
-			s.Loading = true
-			s.Err = nil
-			s.AIStatus = "AI: generating summary and tags..."
-			return tea.Batch(
-				s.Spinner.Tick,
-				GenerateInsightCmd(deps.Insights, i.GUID, buildInsightRequest(i)),
-			), true
-		}
-		return nil, true
+		return startInsightGenerationForSelection(s, deps), true
 	case intent.ToggleSummary:
 		s.ShowAISummary = !s.ShowAISummary
 		if i, ok := s.ArticleList.SelectedItem().(*presenter.Item); ok {
@@ -369,4 +351,20 @@ func refreshDetailViewport(s *state.ModelState, item *presenter.Item) {
 	}
 	s.Viewport.SetContent(buildDetailContent(item, s.ShowAISummary))
 	s.Viewport.GotoTop()
+}
+
+func startInsightGenerationForSelection(s *state.ModelState, deps Deps) tea.Cmd {
+	item, ok := s.ArticleList.SelectedItem().(*presenter.Item)
+	if !ok {
+		return nil
+	}
+
+	s.Loading = true
+	s.Err = nil
+	s.AIStatus = "AI: generating summary and tags..."
+
+	return tea.Batch(
+		s.Spinner.Tick,
+		GenerateInsightCmd(deps.Insights, item.GUID, buildInsightRequest(item)),
+	)
 }
