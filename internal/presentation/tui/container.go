@@ -54,7 +54,7 @@ func (m *Model) buildHeaderProps() header.Props {
 		if currentItem != nil {
 			// Truncate logic
 			sidebarWidth := m.state.Width / 3
-			mainWidth := m.state.Width - sidebarWidth
+			mainWidth := m.state.Width - sidebarWidth - metrics.SidebarRightBorderWidth
 			// Main view has 1 padding left. Header has "🔗 " prefix (~3 chars).
 			// Safe buffer: metrics.HeaderWidthPadding.
 			availableWidth := mainWidth - metrics.HeaderWidthPadding
@@ -102,9 +102,6 @@ func (m *Model) buildMainProps() main_view.Props {
 	}
 	if m.state.Err != nil && (m.state.Session == state.ArticleView || m.state.Session == state.FeedView) && !m.state.Loading {
 		body = fmt.Sprintf("Error: %v\n\n%s", m.state.Err, body)
-	}
-	if m.state.AIStatus != "" && (m.state.Session == state.ArticleView || m.state.Session == state.DetailView) && !m.state.Loading {
-		body = fmt.Sprintf("%s\n\n%s", m.state.AIStatus, body)
 	}
 
 	headerHeight := 0
@@ -164,12 +161,8 @@ func (m *Model) buildModalProps() modal.Props {
 }
 
 func (m *Model) buildFooterProps() string {
-	// If modal is showing help, we might not want to show footer help?
-	// But in model.go logic:
-	// if m.help.ShowAll { return modal } -> exits early, no footer rendering loop.
-	// So footer string isn't used if modal is active.
-	// buildProps generates it anyway.
-	return m.state.Help.View(&m.state.Keys)
+	helpText := m.state.Help.View(&m.state.Keys)
+	return state.FooterText(m.state.Session, m.state.Loading, m.state.AIStatus, helpText)
 }
 
 func headerVisible(session state.Session) bool {

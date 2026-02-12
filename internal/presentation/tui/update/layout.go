@@ -22,7 +22,7 @@ func UpdateListSizes(s *state.ModelState) {
 	layout := buildLayoutMetrics(s)
 	s.FeedList.SetSize(layout.sidebarWidth, layout.sidebarListHeight)
 	s.ArticleList.SetSize(layout.mainWidth, layout.mainListHeight)
-	s.Viewport.Width = s.Width
+	s.Viewport.Width = clampMin(layout.mainWidth-1, 1) // main view has left padding of 1
 	s.Viewport.Height = layout.mainListHeight
 }
 
@@ -34,7 +34,7 @@ func buildLayoutMetrics(s *state.ModelState) layoutMetrics {
 	sidebarListHeight := clampMin(availableHeight-metrics.SidebarTitleLines, 1)
 
 	sidebarWidth := s.Width / 3
-	mainWidth := s.Width - sidebarWidth
+	mainWidth := clampMin(s.Width-sidebarWidth-metrics.SidebarRightBorderWidth, 1)
 
 	sidebarListHeight = reservePaginationSpace(s.FeedList, sidebarListHeight)
 	mainListHeight = reservePaginationSpace(s.ArticleList, mainListHeight)
@@ -49,7 +49,8 @@ func buildLayoutMetrics(s *state.ModelState) layoutMetrics {
 
 func footerHeight(s *state.ModelState) int {
 	s.Help.Width = s.Width
-	return lipgloss.Height(s.Help.View(&s.Keys))
+	helpText := s.Help.View(&s.Keys)
+	return lipgloss.Height(state.FooterText(s.Session, s.Loading, s.AIStatus, helpText))
 }
 
 func reservePaginationSpace(m list.Model, height int) int {

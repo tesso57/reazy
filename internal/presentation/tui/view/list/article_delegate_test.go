@@ -87,6 +87,20 @@ func TestArticleDelegate_Render(t *testing.T) {
 			contains: "[AI] AI Article",
 		},
 		{
+			name:     "Numbered AI Item",
+			item:     mockArticleItem{title: "1. AI Article", hasAI: true},
+			index:    0,
+			mdlIndex: 1,
+			contains: "1. [AI] AI Article",
+		},
+		{
+			name:     "Numbered Bookmarked AI Item",
+			item:     mockArticleItem{title: "2. AI Article", bookmarked: true, hasAI: true},
+			index:    0,
+			mdlIndex: 1,
+			contains: "2. [AI] [B] AI Article",
+		},
+		{
 			name:     "Selected Item",
 			item:     mockArticleItem{title: "Selected Article", isRead: false},
 			index:    0,

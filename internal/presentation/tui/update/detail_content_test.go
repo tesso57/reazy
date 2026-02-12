@@ -12,7 +12,8 @@ func TestBuildDetailContent(t *testing.T) {
 	t.Run("with summary and body", func(t *testing.T) {
 		got := buildDetailContent(&presenter.Item{
 			TitleText: "1. Example",
-			Desc:      "This is an AI summary.",
+			AISummary: "This is an AI summary.",
+			Desc:      "RSS description that should not appear as AI summary.",
 			Content:   "This is the article body.",
 		}, true)
 
@@ -28,8 +29,43 @@ func TestBuildDetailContent(t *testing.T) {
 		if !strings.Contains(got, "This is an AI summary.") {
 			t.Error("expected summary text")
 		}
+		if strings.Contains(got, "RSS description that should not appear as AI summary.") {
+			t.Error("did not expect RSS description in AI summary section")
+		}
 		if !strings.Contains(got, "This is the article body.") {
 			t.Error("expected body text")
+		}
+	})
+
+	t.Run("rss description is not used as ai summary fallback", func(t *testing.T) {
+		got := buildDetailContent(&presenter.Item{
+			TitleText: "1. Example",
+			Desc:      "RSS body text",
+			Content:   "Body",
+		}, true)
+
+		if !strings.Contains(got, "(No AI summary available.)") {
+			t.Error("expected no-ai fallback when generated summary is missing")
+		}
+		if strings.Contains(got, "RSS body text") {
+			t.Error("did not expect RSS description in AI summary section")
+		}
+	})
+
+	t.Run("rss description is used as article body fallback", func(t *testing.T) {
+		got := buildDetailContent(&presenter.Item{
+			TitleText: "1. Example",
+			Desc:      "RSS body text",
+		}, true)
+
+		if !strings.Contains(got, "(No AI summary available.)") {
+			t.Error("expected no-ai fallback when generated summary is missing")
+		}
+		if !strings.Contains(got, "Article Body\nRSS body text") {
+			t.Error("expected RSS description as article body fallback")
+		}
+		if strings.Contains(got, "(No article body available. Open it in the browser.)") {
+			t.Error("did not expect missing-body fallback when RSS description exists")
 		}
 	})
 
@@ -80,6 +116,22 @@ func TestBuildDetailContent(t *testing.T) {
 		}
 		if !strings.Contains(got, "AI Tags: go, rss") {
 			t.Error("expected tags line")
+		}
+	})
+
+	t.Run("long ai summary is wrapped without truncation", func(t *testing.T) {
+		longSummary := strings.Repeat("あ", 120)
+		got := buildDetailContentForWidth(&presenter.Item{
+			TitleText: "1. Example",
+			AISummary: longSummary,
+			Content:   "Body",
+		}, true, 20)
+
+		if count := strings.Count(got, "あ"); count != 120 {
+			t.Fatalf("wrapped summary rune count = %d, want 120", count)
+		}
+		if !strings.Contains(got, "あ\nあ") {
+			t.Error("expected wrapped summary to contain line breaks")
 		}
 	})
 }

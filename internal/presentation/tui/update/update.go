@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tesso57/reazy/internal/application/usecase"
@@ -71,6 +72,9 @@ func HandleKeyMsg(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.Cmd, bool
 	if s.Session == state.DeleteFeedView {
 		return handleDeleteFeedView(s, msg, deps)
 	}
+	if handleFilterExitWithJJ(s, msg) {
+		return nil, true
+	}
 
 	parsed := intent.FromKeyMsg(msg, s.Keys)
 	if parsed.Type == intent.Quit {
@@ -86,6 +90,36 @@ func HandleKeyMsg(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.Cmd, bool
 		return handleArticleViewIntent(s, parsed, deps)
 	case state.DetailView:
 		return handleDetailViewIntent(s, parsed, deps)
+	default:
+		return nil, false
+	}
+}
+
+func handleFilterExitWithJJ(s *state.ModelState, msg tea.KeyMsg) bool {
+	activeList, ok := activeListForFiltering(s)
+	if !ok || activeList.FilterState() != list.Filtering {
+		s.PendingJJExit = false
+		return false
+	}
+	if msg.String() != "j" {
+		s.PendingJJExit = false
+		return false
+	}
+	if s.PendingJJExit {
+		activeList.ResetFilter()
+		s.PendingJJExit = false
+		return true
+	}
+	s.PendingJJExit = true
+	return false
+}
+
+func activeListForFiltering(s *state.ModelState) (*list.Model, bool) {
+	switch s.Session {
+	case state.FeedView:
+		return &s.FeedList, true
+	case state.ArticleView:
+		return &s.ArticleList, true
 	default:
 		return nil, false
 	}
@@ -128,6 +162,7 @@ func HandleFeedFetchedMsg(s *state.ModelState, msg FeedFetchedMsg, deps Deps) {
 // HandleInsightGeneratedMsg applies AI-generated summary/tags to history and visible items.
 func HandleInsightGeneratedMsg(s *state.ModelState, msg InsightGeneratedMsg, deps Deps) {
 	s.Loading = false
+	defer UpdateListSizes(s)
 	if msg.Err != nil {
 		s.AIStatus = fmt.Sprintf("AI: generation failed (%s)", strings.TrimSpace(msg.Err.Error()))
 		return
@@ -349,8 +384,22 @@ func refreshDetailViewport(s *state.ModelState, item *presenter.Item) {
 	if s == nil {
 		return
 	}
-	s.Viewport.SetContent(buildDetailContent(item, s.ShowAISummary))
+	wrapWidth := detailWrapWidth(s)
+	s.Viewport.SetContent(buildDetailContentForWidth(item, s.ShowAISummary, wrapWidth))
 	s.Viewport.GotoTop()
+}
+
+func detailWrapWidth(s *state.ModelState) int {
+	if s == nil {
+		return 0
+	}
+	viewportContentWidth := s.Viewport.Width - s.Viewport.Style.GetHorizontalFrameSize()
+	if viewportContentWidth > 0 {
+		return viewportContentWidth
+	}
+	// Fallback for early calls before first resize.
+	mainContentWidth := s.ArticleList.Width() - 1 // main view has left padding of 1
+	return clampMin(mainContentWidth-s.Viewport.Style.GetHorizontalFrameSize(), 1)
 }
 
 func startInsightGenerationForSelection(s *state.ModelState, deps Deps) tea.Cmd {

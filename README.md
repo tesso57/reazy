@@ -14,6 +14,7 @@ Reazy (Read + Lazy) is a modern, terminal-based RSS/Atom reader built with Go an
 - **All Feeds**: View articles from all feeds in a unified timeline.
 - **AI Summary View**: In the detail screen, AI summary and article body are clearly separated for easier reading.
 - **AI Insights (Optional)**: Generate article summaries and tags via Codex CLI.
+- **AI Status Footer**: AI generation status is shown in the footer in article/detail views.
 
 ## Installation
 
@@ -85,8 +86,8 @@ codex:
 ```
 
 Then select an article and press `s` in article/detail view to generate:
-- a concise summary
-- topic tags
+- a Japanese summary readable in about 3 minutes
+- English topic tags
 
 ## Alternatives
 There are other RSS readers available:

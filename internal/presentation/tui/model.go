@@ -57,6 +57,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		cmd, handled := update.HandleKeyMsg(m.state, msg, m.deps())
 		if handled {
+			update.UpdateListSizes(m.state)
 			return m, cmd
 		}
 	case tea.WindowSizeMsg:

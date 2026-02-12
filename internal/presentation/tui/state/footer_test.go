@@ -1,0 +1,66 @@
+package state
+
+import "testing"
+
+func TestFooterText(t *testing.T) {
+	tests := []struct {
+		name     string
+		session  Session
+		loading  bool
+		aiStatus string
+		helpText string
+		want     string
+	}{
+		{
+			name:     "help only when no ai status",
+			session:  ArticleView,
+			helpText: "help",
+			want:     "help",
+		},
+		{
+			name:     "help only outside article/detail",
+			session:  FeedView,
+			aiStatus: "AI: updated",
+			helpText: "help",
+			want:     "help",
+		},
+		{
+			name:     "help only while loading",
+			session:  ArticleView,
+			loading:  true,
+			aiStatus: "AI: updated",
+			helpText: "help",
+			want:     "help",
+		},
+		{
+			name:     "ai status prepended in article view",
+			session:  ArticleView,
+			aiStatus: "AI: updated",
+			helpText: "help",
+			want:     "AI: updated\nhelp",
+		},
+		{
+			name:     "ai status prepended in detail view",
+			session:  DetailView,
+			aiStatus: "AI: updated",
+			helpText: "help",
+			want:     "AI: updated\nhelp",
+		},
+		{
+			name:     "ai status only when help empty",
+			session:  DetailView,
+			aiStatus: "AI: updated",
+			helpText: "",
+			want:     "AI: updated",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FooterText(tt.session, tt.loading, tt.aiStatus, tt.helpText)
+			if got != tt.want {
+				t.Fatalf("FooterText() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

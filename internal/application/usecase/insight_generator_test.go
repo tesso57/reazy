@@ -42,6 +42,12 @@ func TestPromptInsightGenerator_Generate(t *testing.T) {
 	if !strings.Contains(client.prompt, "Article JSON:") {
 		t.Fatalf("prompt missing article payload: %q", client.prompt)
 	}
+	if !strings.Contains(client.prompt, "summary: in Japanese (ja-JP), readable in about 3 minutes") {
+		t.Fatalf("prompt missing summary duration rule: %q", client.prompt)
+	}
+	if !strings.Contains(client.prompt, "tags: 3 to 8 short tags in English") {
+		t.Fatalf("prompt missing tags language rule: %q", client.prompt)
+	}
 }
 
 func TestPromptInsightGenerator_ParseOutputWithNoise(t *testing.T) {

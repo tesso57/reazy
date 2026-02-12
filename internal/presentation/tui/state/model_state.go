@@ -30,4 +30,5 @@ type ModelState struct {
 	Previous      Session
 	History       *reading.History
 	Feeds         []string
+	PendingJJExit bool
 }

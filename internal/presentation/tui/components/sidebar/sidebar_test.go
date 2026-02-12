@@ -42,3 +42,20 @@ func TestRender(t *testing.T) {
 		})
 	}
 }
+
+func TestRender_TruncatesTitleOnNarrowWidth(t *testing.T) {
+	got := Render(Props{
+		View:   "FEED LIST",
+		Title:  "Reazy Feeds",
+		Width:  6,
+		Height: 8,
+		Active: true,
+	})
+
+	if !strings.Contains(got, "...") {
+		t.Fatalf("expected truncated title with ellipsis, got: %q", got)
+	}
+	if strings.Contains(got, "Feeds") {
+		t.Fatalf("expected title not to wrap into second word, got: %q", got)
+	}
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/tesso57/reazy/internal/application/settings"
 	"github.com/tesso57/reazy/internal/domain/reading"
 	"github.com/tesso57/reazy/internal/infrastructure/history"
@@ -224,7 +225,7 @@ func TestUpdate(t *testing.T) {
 
 	// Test Detail View Navigation
 	m.state.Session = state.ArticleView
-	m.state.ArticleList.SetItems([]list.Item{&presenter.Item{TitleText: "A", Desc: "Desc", Link: "L"}})
+	m.state.ArticleList.SetItems([]list.Item{&presenter.Item{TitleText: "A", Desc: "Desc", AISummary: "Generated summary", Link: "L"}})
 	// Enter -> Detail View
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}) // 'l' triggers detail view now
 	m = tm.(*Model)
@@ -237,7 +238,7 @@ func TestUpdate(t *testing.T) {
 	if !strings.Contains(m.state.Viewport.View(), "Article Body") {
 		t.Error("Viewport missing Article Body section")
 	}
-	if !strings.Contains(m.state.Viewport.View(), "Desc") {
+	if !strings.Contains(m.state.Viewport.View(), "Generated summary") {
 		t.Error("Viewport missing summary content")
 	}
 	// Esc -> Article View
@@ -371,6 +372,160 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("Expected cursor reset to 0, got %d", m.state.ArticleList.Index())
 	}
 	// Verify filter is reset (mock filter state if possible, but list.Model internals hard to set without interaction)
+}
+
+func TestDetailViewHeaderVisibleWithAISummary(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds: []string{"http://example.com"},
+		KeyMap: settings.KeyMapConfig{
+			Open:  "enter",
+			Right: "l",
+		},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = tm.(*Model)
+
+	m.state.Session = state.ArticleView
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{
+			TitleText:     "1. Header check",
+			RawTitle:      "Header check",
+			Desc:          "desc",
+			Content:       "body",
+			Link:          "https://example.com/post",
+			FeedTitleText: "Example Feed",
+			GUID:          "guid-1",
+			AISummary:     "AI summary exists",
+		},
+	})
+	m.state.ArticleList.Select(0)
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = tm.(*Model)
+	if m.state.Session != state.DetailView {
+		t.Fatalf("session = %v, want detail view", m.state.Session)
+	}
+
+	viewOutput := m.View()
+	if !strings.Contains(viewOutput, "🔗") {
+		t.Fatalf("expected link header in detail view, got: %s", viewOutput)
+	}
+	if !strings.Contains(viewOutput, "🏷️") {
+		t.Fatalf("expected feed header in detail view, got: %s", viewOutput)
+	}
+
+	m.state.AIStatus = "AI: updated 2026-02-08 10:00"
+	update.UpdateListSizes(m.state)
+	viewOutput = m.View()
+	if !strings.Contains(viewOutput, "AI: updated 2026-02-08 10:00") {
+		t.Fatalf("expected AI status in footer, got: %s", viewOutput)
+	}
+	if strings.Contains(viewOutput, "AI: updated 2026-02-08 10:00\n\n") {
+		t.Fatalf("AI status should not be inserted into main body, got: %s", viewOutput)
+	}
+	if !strings.Contains(viewOutput, "Reazy Feeds") {
+		t.Fatalf("expected sidebar title to remain visible, got: %s", viewOutput)
+	}
+	if got, wantMax := lipgloss.Height(viewOutput), m.state.Height; got > wantMax {
+		t.Fatalf("view height overflow in detail view with AI status: got=%d max=%d", got, wantMax)
+	}
+	for _, line := range strings.Split(viewOutput, "\n") {
+		if w := lipgloss.Width(line); w > m.state.Width {
+			t.Fatalf("view width overflow in detail view with AI status: got=%d max=%d line=%q", w, m.state.Width, line)
+		}
+	}
+}
+
+func TestArticleViewHeaderAndSidebarVisibleWithAIStatusFooter(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds: []string{"http://example.com"},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = tm.(*Model)
+
+	m.state.Session = state.ArticleView
+	m.state.AIStatus = "AI: updated 2026-02-09 10:00"
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{
+			TitleText:     "1. Header check",
+			RawTitle:      "Header check",
+			Desc:          "desc",
+			Content:       "body",
+			Link:          "https://example.com/post",
+			FeedTitleText: "Example Feed",
+			GUID:          "guid-2",
+		},
+	})
+	m.state.ArticleList.Select(0)
+	update.UpdateListSizes(m.state)
+
+	viewOutput := m.View()
+	if !strings.Contains(viewOutput, "Reazy Feeds") {
+		t.Fatalf("expected sidebar title in article view, got: %s", viewOutput)
+	}
+	if !strings.Contains(viewOutput, "🔗") {
+		t.Fatalf("expected link header in article view, got: %s", viewOutput)
+	}
+	if !strings.Contains(viewOutput, "🏷️") {
+		t.Fatalf("expected feed header in article view, got: %s", viewOutput)
+	}
+	if !strings.Contains(viewOutput, "AI: updated 2026-02-09 10:00") {
+		t.Fatalf("expected AI status in footer in article view, got: %s", viewOutput)
+	}
+	if strings.Contains(viewOutput, "AI: updated 2026-02-09 10:00\n\n") {
+		t.Fatalf("AI status should not be inserted into article body, got: %s", viewOutput)
+	}
+	if got, wantMax := lipgloss.Height(viewOutput), m.state.Height; got > wantMax {
+		t.Fatalf("view height overflow in article view with AI status: got=%d max=%d", got, wantMax)
+	}
+	for _, line := range strings.Split(viewOutput, "\n") {
+		if w := lipgloss.Width(line); w > m.state.Width {
+			t.Fatalf("view width overflow in article view with AI status: got=%d max=%d line=%q", w, m.state.Width, line)
+		}
+	}
+}
+
+func TestSidebarTitleVisibleDuringFilterInput(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds: []string{
+			"https://example.com/feed1.xml",
+			"https://example.com/feed2.xml",
+			"https://example.com/feed3.xml",
+		},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
+	m = tm.(*Model)
+
+	assertStable := func(step string) {
+		t.Helper()
+		viewOutput := m.View()
+		if !strings.Contains(viewOutput, "Reazy Feeds") {
+			t.Fatalf("sidebar title disappeared at %s: %s", step, viewOutput)
+		}
+		if got, max := lipgloss.Height(viewOutput), m.state.Height; got > max {
+			t.Fatalf("view height overflow at %s: got=%d max=%d", step, got, max)
+		}
+	}
+
+	assertStable("initial")
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = tm.(*Model)
+	assertStable("filter-start")
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	m = tm.(*Model)
+	assertStable("filter-input-1")
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	m = tm.(*Model)
+	assertStable("filter-input-2")
 }
 
 func TestFetchFeedCmd(t *testing.T) {

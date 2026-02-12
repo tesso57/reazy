@@ -4,6 +4,7 @@ package listview
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -54,15 +55,7 @@ func (d *ArticleDelegate) Render(w io.Writer, m list.Model, index int, item list
 		return
 	}
 
-	title := i.Title()
-
-	// If Bookmarked, prepend [B]
-	if i.IsBookmarked() {
-		title = fmt.Sprintf("[B] %s", title)
-	}
-	if i.HasAISummary() {
-		title = fmt.Sprintf("[AI] %s", title)
-	}
+	title := decorateArticleTitle(i.Title(), i.IsBookmarked(), i.HasAISummary())
 
 	style := itemStyle(d.Styles, m, index)
 	title = truncateItemText(m, style, title)
@@ -73,4 +66,40 @@ func (d *ArticleDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	renderItemText(w, style, title)
+}
+
+func decorateArticleTitle(title string, bookmarked, hasAISummary bool) string {
+	badges := make([]string, 0, 2)
+	if hasAISummary {
+		badges = append(badges, "[AI]")
+	}
+	if bookmarked {
+		badges = append(badges, "[B]")
+	}
+	if len(badges) == 0 {
+		return title
+	}
+
+	badgeText := strings.Join(badges, " ")
+	prefix, rest, ok := splitOrdinalPrefix(title)
+	if !ok {
+		return fmt.Sprintf("%s %s", badgeText, title)
+	}
+	if rest == "" {
+		return strings.TrimSpace(fmt.Sprintf("%s%s", prefix, badgeText))
+	}
+	return fmt.Sprintf("%s%s %s", prefix, badgeText, rest)
+}
+
+func splitOrdinalPrefix(title string) (prefix, rest string, ok bool) {
+	dotIdx := strings.Index(title, ". ")
+	if dotIdx <= 0 {
+		return "", "", false
+	}
+	for _, r := range title[:dotIdx] {
+		if r < '0' || r > '9' {
+			return "", "", false
+		}
+	}
+	return title[:dotIdx+2], strings.TrimLeft(title[dotIdx+2:], " "), true
 }

@@ -3,6 +3,7 @@ package sidebar
 
 import (
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tesso57/reazy/internal/presentation/tui/textutil"
 )
 
 // Props defines the properties for the sidebar component.
@@ -31,9 +32,15 @@ func Render(p Props) string {
 		PaddingBottom(1).
 		Foreground(lipgloss.Color("205")) // Use same color as spinner/active border for consistency
 
+	titleWidth := p.Width - 3 // reserve right border + left padding
+	if titleWidth < 0 {
+		titleWidth = 0
+	}
+	title := textutil.Truncate(textutil.SingleLine(p.Title), titleWidth)
+
 	return sidebarStyle.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
-		titleStyle.Render(p.Title),
+		titleStyle.Render(title),
 		p.View,
 	))
 }
