@@ -21,26 +21,45 @@ import (
 // Model represents the main application state.
 type Model struct {
 	settings      settings.Settings
-	subscriptions usecase.SubscriptionService
-	reading       usecase.ReadingService
-	insights      usecase.InsightService
+	subscriptions *usecase.SubscriptionService
+	reading       *usecase.ReadingService
+	insights      *usecase.InsightService
+	newsDigests   *usecase.NewsDigestService
 	state         *state.ModelState
 }
 
 // NewModel creates a new application model.
-func NewModel(cfg settings.Settings, subscriptions usecase.SubscriptionService, readingSvc usecase.ReadingService) *Model {
-	return NewModelWithInsights(cfg, subscriptions, readingSvc, usecase.NewInsightService(nil, nil))
+func NewModel(cfg settings.Settings, subscriptions *usecase.SubscriptionService, readingSvc *usecase.ReadingService) *Model {
+	return NewModelWithServices(
+		cfg,
+		subscriptions,
+		readingSvc,
+		usecase.NewInsightService(nil, nil),
+		usecase.NewNewsDigestService(nil, nil, nil),
+	)
 }
 
 // NewModelWithInsights creates a new application model with AI insights support.
-func NewModelWithInsights(cfg settings.Settings, subscriptions usecase.SubscriptionService, readingSvc usecase.ReadingService, insightSvc usecase.InsightService) *Model {
-	return &Model{
+func NewModelWithInsights(cfg settings.Settings, subscriptions *usecase.SubscriptionService, readingSvc *usecase.ReadingService, insightSvc *usecase.InsightService) *Model {
+	return NewModelWithServices(cfg, subscriptions, readingSvc, insightSvc, usecase.NewNewsDigestService(nil, nil, nil))
+}
+
+// NewModelWithServices creates a new application model with all optional AI services.
+func NewModelWithServices(
+	cfg settings.Settings,
+	subscriptions *usecase.SubscriptionService,
+	readingSvc *usecase.ReadingService,
+	insightSvc *usecase.InsightService,
+	newsDigestSvc *usecase.NewsDigestService,
+) *Model {
+	return new(Model{
 		settings:      cfg,
 		subscriptions: subscriptions,
 		reading:       readingSvc,
 		insights:      insightSvc,
+		newsDigests:   newsDigestSvc,
 		state:         newModelState(cfg, readingSvc),
-	}
+	})
 }
 
 // Init initializes the model.
@@ -63,7 +82,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		update.HandleWindowSize(m.state, msg)
 	case update.FeedFetchedMsg:
-		update.HandleFeedFetchedMsg(m.state, msg, m.deps())
+		cmds = append(cmds, update.HandleFeedFetchedMsg(m.state, msg, m.deps()))
+	case update.NewsDigestGeneratedMsg:
+		update.HandleNewsDigestGeneratedMsg(m.state, msg, m.deps())
 	case update.InsightGeneratedMsg:
 		update.HandleInsightGeneratedMsg(m.state, msg, m.deps())
 	}
@@ -95,6 +116,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case state.ArticleView:
 		m.state.ArticleList, cmd = m.state.ArticleList.Update(msg)
 		cmds = append(cmds, cmd)
+	case state.NewsTopicView:
+		m.state.ArticleList, cmd = m.state.ArticleList.Update(msg)
+		cmds = append(cmds, cmd)
 	case state.DetailView:
 		m.state.Viewport, cmd = m.state.Viewport.Update(msg)
 		cmds = append(cmds, cmd)
@@ -113,24 +137,26 @@ func (m *Model) deps() update.Deps {
 		Subscriptions: m.subscriptions,
 		Reading:       m.reading,
 		Insights:      m.insights,
+		NewsDigests:   m.newsDigests,
 		OpenBrowser:   openBrowser,
 	}
 }
 
-func newModelState(cfg settings.Settings, readingSvc usecase.ReadingService) *state.ModelState {
-	st := &state.ModelState{
-		Session:       state.FeedView,
-		FeedList:      newFeedList(cfg),
-		ArticleList:   newArticleList(),
-		TextInput:     newTextInput(),
-		Viewport:      newViewport(),
-		Help:          help.New(),
-		Spinner:       newSpinner(),
-		Keys:          state.NewKeyMap(cfg.KeyMap),
-		History:       loadHistory(readingSvc),
-		Feeds:         append([]string(nil), cfg.Feeds...),
-		ShowAISummary: true,
-	}
+func newModelState(cfg settings.Settings, readingSvc *usecase.ReadingService) *state.ModelState {
+	st := new(state.ModelState{
+		Session:             state.FeedView,
+		FeedList:            newFeedList(cfg),
+		ArticleList:         newArticleList(),
+		TextInput:           newTextInput(),
+		Viewport:            newViewport(),
+		Help:                help.New(),
+		Spinner:             newSpinner(),
+		Keys:                state.NewKeyMap(cfg.KeyMap),
+		History:             loadHistory(readingSvc),
+		Feeds:               append([]string(nil), cfg.Feeds...),
+		ShowAISummary:       true,
+		DetailParentSession: state.ArticleView,
+	})
 
 	st.FeedList.KeyMap.PrevPage = st.Keys.UpPage
 	st.FeedList.KeyMap.NextPage = st.Keys.DownPage
@@ -185,7 +211,7 @@ func newViewport() viewport.Model {
 	return vp
 }
 
-func loadHistory(readingSvc usecase.ReadingService) *reading.History {
+func loadHistory(readingSvc *usecase.ReadingService) *reading.History {
 	hist, _ := readingSvc.LoadHistory()
 	if hist == nil {
 		hist = reading.NewHistory(nil)

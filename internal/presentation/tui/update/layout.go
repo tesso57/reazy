@@ -32,6 +32,9 @@ func buildLayoutMetrics(s *state.ModelState) layoutMetrics {
 
 	mainListHeight := clampMin(availableHeight-metrics.HeaderLines, 1)
 	sidebarListHeight := clampMin(availableHeight-metrics.SidebarTitleLines, 1)
+	if s.Session == state.NewsTopicView {
+		mainListHeight = clampMin(mainListHeight-metrics.NewsTopicSummaryLines, 1)
+	}
 
 	sidebarWidth := s.Width / 3
 	mainWidth := clampMin(s.Width-sidebarWidth-metrics.SidebarRightBorderWidth, 1)

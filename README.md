@@ -12,11 +12,15 @@ Reazy (Read + Lazy) is a modern, terminal-based RSS/Atom reader built with Go an
 - **Updates**: Pull-to-refresh support.
 - **Read Status**: Tracks read articles and dims them.
 - **All Feeds**: View articles from all feeds in a unified timeline.
+- **Date Sections in Lists**: `All Feeds` / `Bookmarks` / each feed view are grouped by date.
+- **News Tab (AI Digest)**: Build daily AI digest topics from today's articles and keep digest history grouped by date.
 - **AI Summary View**: In the detail screen, AI summary and article body are clearly separated for easier reading.
 - **AI Insights (Optional)**: Generate article summaries and tags via Codex CLI.
-- **AI Status Footer**: AI generation status is shown in the footer in article/detail views.
+- **AI Status Footer**: AI generation status is shown in the footer in article/detail/topic views.
 
 ## Installation
+
+Requires Go 1.26 or later when building from source.
 
 ### From Source
 ```bash
@@ -37,18 +41,22 @@ Run the application:
 reazy
 ```
 
+In the feed sidebar, select `* News` to open AI digest history grouped by date.  
+Today's digest is generated from your registered feeds and cached for the day.  
+In normal feed views (`All Feeds` / `Bookmarks` / each feed), articles are grouped by date sections.
+
 ### Keybindings (Default)
 - **Navigation**:
   - `k` / `↑`: Up
   - `j` / `↓`: Down
   - `h` / `←`: Back / Focus Feeds
-  - `l` / `→` / `Enter`: View AI Summary + Article Body / Open Link
+  - `l` / `→` / `Enter`: Open selected item (article, digest topic, or link in detail)
 - **Actions**:
   - `a`: Add Feed
   - `x`: Delete Feed
-  - `r`: Refresh Feed
+  - `r`: Refresh current feed (`News` tab regenerates today's digest)
   - `b`: Toggle Bookmark
-  - `s`: Generate AI Summary/Tags
+  - `s`: Generate AI Summary/Tags (article/detail)
   - `S`: Toggle AI Summary visibility (detail view)
   - `?`: Toggle Help
   - `q`: Quit
@@ -88,6 +96,8 @@ codex:
 Then select an article and press `s` in article/detail view to generate:
 - a Japanese summary readable in about 3 minutes
 - English topic tags
+
+You can also open `* News` to view date-grouped AI digest history (including past days).
 
 ## Alternatives
 There are other RSS readers available:

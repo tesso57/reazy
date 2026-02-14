@@ -14,6 +14,7 @@ type mockArticleItem struct {
 	bookmarked bool
 	hasAI      bool
 	feedTitle  string
+	section    bool
 }
 
 func (m mockArticleItem) Title() string       { return m.title }
@@ -23,6 +24,9 @@ func (m mockArticleItem) IsRead() bool        { return m.isRead }
 func (m mockArticleItem) IsBookmarked() bool  { return m.bookmarked }
 func (m mockArticleItem) HasAISummary() bool  { return m.hasAI }
 func (m mockArticleItem) FeedTitle() string   { return m.feedTitle }
+func (m mockArticleItem) IsSectionHeader() bool {
+	return m.section
+}
 
 func TestNewArticleDelegate(t *testing.T) {
 	d := NewArticleDelegate()
@@ -106,6 +110,13 @@ func TestArticleDelegate_Render(t *testing.T) {
 			index:    0,
 			mdlIndex: 0, // Selected
 			contains: "Selected Article",
+		},
+		{
+			name:     "Section Header",
+			item:     mockArticleItem{title: "== 2026-02-14 (3) ==", section: true, hasAI: true, bookmarked: true},
+			index:    0,
+			mdlIndex: 1,
+			contains: "== 2026-02-14 (3) ==",
 		},
 		{
 			name:     "Invalid Item",

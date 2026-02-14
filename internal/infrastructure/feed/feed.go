@@ -52,11 +52,11 @@ func Fetch(url string) (*reading.Feed, error) {
 		return nil, err
 	}
 
-	f := &reading.Feed{
+	f := new(reading.Feed{
 		Title: parsed.Title,
 		URL:   url,
 		Items: make([]reading.Item, len(parsed.Items)),
-	}
+	})
 
 	for i, item := range parsed.Items {
 		pub := item.Published
@@ -93,16 +93,14 @@ func FetchAll(urls []string) (*reading.Feed, error) {
 	var allItems []reading.Item
 
 	for _, url := range urls {
-		wg.Add(1)
-		go func(u string) {
-			defer wg.Done()
-			f, err := Fetch(u)
+		wg.Go(func() {
+			f, err := Fetch(url)
 			if err == nil {
 				mu.Lock()
 				allItems = append(allItems, f.Items...)
 				mu.Unlock()
 			}
-		}(url)
+		})
 	}
 	wg.Wait()
 
@@ -111,11 +109,11 @@ func FetchAll(urls []string) (*reading.Feed, error) {
 		return allItems[i].Date.After(allItems[j].Date)
 	})
 
-	return &reading.Feed{
+	return new(reading.Feed{
 		Title: "All Feeds",
 		URL:   reading.AllFeedsURL,
 		Items: allItems,
-	}, nil
+	}), nil
 }
 
 // Fetcher implements the usecase.FeedFetcher interface.

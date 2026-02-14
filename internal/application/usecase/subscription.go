@@ -19,17 +19,17 @@ type SubscriptionService struct {
 }
 
 // NewSubscriptionService constructs a SubscriptionService.
-func NewSubscriptionService(repo SubscriptionRepository) SubscriptionService {
-	return SubscriptionService{Repo: repo}
+func NewSubscriptionService(repo SubscriptionRepository) *SubscriptionService {
+	return new(SubscriptionService{Repo: repo})
 }
 
 // List returns all subscribed feed URLs.
-func (s SubscriptionService) List() ([]string, error) {
+func (s *SubscriptionService) List() ([]string, error) {
 	return s.Repo.List()
 }
 
 // Add registers a new feed URL and returns the updated list.
-func (s SubscriptionService) Add(url string) ([]string, error) {
+func (s *SubscriptionService) Add(url string) ([]string, error) {
 	trimmed := strings.TrimSpace(url)
 	if trimmed == "" {
 		return nil, fmt.Errorf("feed url is empty")
@@ -44,7 +44,7 @@ func (s SubscriptionService) Add(url string) ([]string, error) {
 }
 
 // Remove deletes a feed by index and returns the updated list.
-func (s SubscriptionService) Remove(index int) ([]string, error) {
+func (s *SubscriptionService) Remove(index int) ([]string, error) {
 	if err := s.Repo.Remove(index); err != nil {
 		return nil, err
 	}

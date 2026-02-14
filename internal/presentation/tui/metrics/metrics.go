@@ -6,6 +6,7 @@ const (
 	SidebarTitleLines       = 2
 	HeaderWidthPadding      = 7
 	SidebarRightBorderWidth = 1
+	NewsTopicSummaryLines   = 8
 
 	ItemRightPadding  = 1
 	ItemSafetyPadding = 1

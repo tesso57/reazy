@@ -98,3 +98,73 @@ func TestReadingService_ToggleBookmark(t *testing.T) {
 		})
 	}
 }
+
+type mockFeedFetcher struct {
+	fetchCalls    int
+	fetchAllCalls int
+	lastURL       string
+	lastAll       []string
+	feed          *reading.Feed
+}
+
+func (m *mockFeedFetcher) Fetch(url string) (*reading.Feed, error) {
+	m.fetchCalls++
+	m.lastURL = url
+	return m.feed, nil
+}
+
+func (m *mockFeedFetcher) FetchAll(urls []string) (*reading.Feed, error) {
+	m.fetchAllCalls++
+	m.lastAll = append([]string(nil), urls...)
+	return m.feed, nil
+}
+
+func TestReadingService_FetchFeed_NewsUsesFetchAll(t *testing.T) {
+	fetcher := &mockFeedFetcher{
+		feed: &reading.Feed{
+			Title: "All Feeds",
+			URL:   reading.AllFeedsURL,
+		},
+	}
+	svc := NewReadingService(fetcher, nil, nil)
+
+	all := []string{"https://example.com/rss", "https://example.com/atom"}
+	feed, err := svc.FetchFeed(reading.NewsURL, all)
+	if err != nil {
+		t.Fatalf("FetchFeed(news) error = %v", err)
+	}
+	if feed == nil {
+		t.Fatal("FetchFeed(news) should return feed")
+	}
+	if fetcher.fetchCalls != 0 {
+		t.Fatalf("Fetch should not be called for news, got %d", fetcher.fetchCalls)
+	}
+	if fetcher.fetchAllCalls != 1 {
+		t.Fatalf("FetchAll calls = %d, want 1", fetcher.fetchAllCalls)
+	}
+	if len(fetcher.lastAll) != 2 {
+		t.Fatalf("FetchAll urls len = %d, want 2", len(fetcher.lastAll))
+	}
+	if feed.URL != reading.NewsURL {
+		t.Fatalf("feed.URL = %q, want %q", feed.URL, reading.NewsURL)
+	}
+}
+
+func TestReadingService_FetchFeed_BookmarksSkipsFetcher(t *testing.T) {
+	fetcher := &mockFeedFetcher{}
+	svc := NewReadingService(fetcher, nil, nil)
+
+	feed, err := svc.FetchFeed(reading.BookmarksURL, []string{"https://example.com/rss"})
+	if err != nil {
+		t.Fatalf("FetchFeed(bookmarks) error = %v", err)
+	}
+	if fetcher.fetchCalls != 0 || fetcher.fetchAllCalls != 0 {
+		t.Fatalf("fetcher should not be called for bookmarks: fetch=%d fetchAll=%d", fetcher.fetchCalls, fetcher.fetchAllCalls)
+	}
+	if feed == nil {
+		t.Fatal("FetchFeed(bookmarks) should return feed")
+	}
+	if feed.URL != reading.BookmarksURL {
+		t.Fatalf("feed.URL = %q, want %q", feed.URL, reading.BookmarksURL)
+	}
+}

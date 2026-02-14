@@ -34,8 +34,8 @@ func TestNewModel(t *testing.T) {
 	if m.state.Session != state.FeedView {
 		t.Error("Expected initial state to be feedView")
 	}
-	if len(m.state.FeedList.Items()) != 3 { // All + Bookmarks + 1 Feed
-		t.Errorf("Expected 3 feed items (All+Bookmarks+1), got %d", len(m.state.FeedList.Items()))
+	if len(m.state.FeedList.Items()) != 4 { // All + News + Bookmarks + 1 Feed
+		t.Errorf("Expected 4 feed items (All+News+Bookmarks+1), got %d", len(m.state.FeedList.Items()))
 	}
 }
 
@@ -337,10 +337,20 @@ func TestUpdate(t *testing.T) {
 	m.state.FeedList.Select(0)
 
 	update.HandleFeedFetchedMsg(m.state, msgAll, m.deps())
-	// Check if title contains [TechCrunch]
+	// Check if at least one article title contains [TechCrunch]
 	if len(m.state.ArticleList.Items()) > 0 {
-		itm := m.state.ArticleList.Items()[0].(*presenter.Item)
-		if !strings.Contains(itm.TitleText, "[TechCrunch]") {
+		found := false
+		for _, listItem := range m.state.ArticleList.Items() {
+			itm := listItem.(*presenter.Item)
+			if itm.IsSectionHeader() {
+				continue
+			}
+			if strings.Contains(itm.TitleText, "[TechCrunch]") {
+				found = true
+				break
+			}
+		}
+		if !found {
 			t.Error("All feeds title missing feed label")
 		}
 	} else {
@@ -431,7 +441,7 @@ func TestDetailViewHeaderVisibleWithAISummary(t *testing.T) {
 	if got, wantMax := lipgloss.Height(viewOutput), m.state.Height; got > wantMax {
 		t.Fatalf("view height overflow in detail view with AI status: got=%d max=%d", got, wantMax)
 	}
-	for _, line := range strings.Split(viewOutput, "\n") {
+	for line := range strings.SplitSeq(viewOutput, "\n") {
 		if w := lipgloss.Width(line); w > m.state.Width {
 			t.Fatalf("view width overflow in detail view with AI status: got=%d max=%d line=%q", w, m.state.Width, line)
 		}
@@ -482,7 +492,7 @@ func TestArticleViewHeaderAndSidebarVisibleWithAIStatusFooter(t *testing.T) {
 	if got, wantMax := lipgloss.Height(viewOutput), m.state.Height; got > wantMax {
 		t.Fatalf("view height overflow in article view with AI status: got=%d max=%d", got, wantMax)
 	}
-	for _, line := range strings.Split(viewOutput, "\n") {
+	for line := range strings.SplitSeq(viewOutput, "\n") {
 		if w := lipgloss.Width(line); w > m.state.Width {
 			t.Fatalf("view width overflow in article view with AI status: got=%d max=%d line=%q", w, m.state.Width, line)
 		}
@@ -526,6 +536,34 @@ func TestSidebarTitleVisibleDuringFilterInput(t *testing.T) {
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	m = tm.(*Model)
 	assertStable("filter-input-2")
+}
+
+func TestArticleViewHeaderHiddenForNewsSectionHeader(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds: []string{"http://example.com"},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = tm.(*Model)
+
+	m.state.Session = state.ArticleView
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{
+			TitleText:     "== 2026-02-14 (2) ==",
+			SectionHeader: true,
+		},
+	})
+	m.state.ArticleList.Select(0)
+	update.UpdateListSizes(m.state)
+
+	viewOutput := m.View()
+	if strings.Contains(viewOutput, "🔗") {
+		t.Fatalf("did not expect link header for section header selection, got: %s", viewOutput)
+	}
+	if strings.Contains(viewOutput, "🏷️") {
+		t.Fatalf("did not expect feed header for section header selection, got: %s", viewOutput)
+	}
 }
 
 func TestFetchFeedCmd(t *testing.T) {
@@ -654,8 +692,8 @@ func TestHistoryIntegration(t *testing.T) {
 
 	update.HandleFeedFetchedMsg(m.state, msg, m.deps())
 
-	// Verify Article List
-	// Should contain 3 items: Merged, HistoryOnly, NewItem
+		// Verify Article List
+		// Should contain section headers + 3 articles.
 	// Sorted by Date logic?
 	// NewItem (Now), Merged (Now from fetch? Or history? We overwrite history date with fetch?)
 	// Logic: if exists, we update missing FeedURL, but we didn't update Date.
@@ -668,8 +706,8 @@ func TestHistoryIntegration(t *testing.T) {
 	// Order: NewItem, Merged, HistoryOnly.
 
 	items := m.state.ArticleList.Items()
-	if len(items) != 3 {
-		t.Errorf("Expected 3 items in list, got %d", len(items))
+	if len(items) != 4 {
+		t.Errorf("Expected 4 items in list (1 section + 3 articles), got %d", len(items))
 	}
 
 	// Verify Merged Item IsRead
@@ -696,20 +734,26 @@ func TestHistoryIntegration(t *testing.T) {
 		t.Error("Merged item not found in list")
 	}
 
-	// Test Mark as Read
-	// Select "New Item" (assuming it's at index 0 because it's newest)
-	// Actually, confirm order first or find index.
-	// NewItem is newest, so list[0] should be NewItem.
-	m.state.ArticleList.Select(0)
+	// Test Mark as Read by finding "New Item" index (sections are present).
+	newItemIndex := -1
+	for index, listItem := range m.state.ArticleList.Items() {
+		item := listItem.(*presenter.Item)
+		if strings.Contains(item.TitleText, "New Item") {
+			newItemIndex = index
+			break
+		}
+	}
+	if newItemIndex < 0 {
+		t.Fatal("New Item not found in article list")
+	}
+	m.state.ArticleList.Select(newItemIndex)
 	it := m.state.ArticleList.SelectedItem().(*presenter.Item)
 	// Check feedTitle is populated
-	if it.FeedTitleText == "" && feedTitleItem.FeedTitleText == "" {
+	if it.FeedTitleText == "" && feedTitleItem != nil && feedTitleItem.FeedTitleText == "" {
 		t.Log("FeedTitle is empty, check handleFeedFetchedMsg logic or test setup")
 	}
-	m.state.ArticleList.Select(0)
-	it = m.state.ArticleList.SelectedItem().(*presenter.Item)
 	if !strings.Contains(it.TitleText, "New Item") {
-		t.Errorf("Expected first item to be New Item, got %s", it.TitleText)
+		t.Errorf("Expected selected item to be New Item, got %s", it.TitleText)
 	}
 
 	// Trigger "Open" (l key)

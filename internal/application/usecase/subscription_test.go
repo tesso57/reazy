@@ -30,7 +30,7 @@ func (s *stubSubscriptionRepo) Remove(index int) error {
 
 func TestSubscriptionAddTrimsWhitespace(t *testing.T) {
 	repo := &stubSubscriptionRepo{}
-	svc := SubscriptionService{Repo: repo}
+	svc := NewSubscriptionService(repo)
 
 	_, err := svc.Add("  https://github.com/golang/go/releases.atom\t")
 	if err != nil {
@@ -44,7 +44,7 @@ func TestSubscriptionAddTrimsWhitespace(t *testing.T) {
 
 func TestSubscriptionAddRejectsEmpty(t *testing.T) {
 	repo := &stubSubscriptionRepo{}
-	svc := SubscriptionService{Repo: repo}
+	svc := NewSubscriptionService(repo)
 
 	if _, err := svc.Add(" \t\n"); err == nil {
 		t.Fatal("Expected error for empty url")
@@ -53,7 +53,7 @@ func TestSubscriptionAddRejectsEmpty(t *testing.T) {
 
 func TestSubscriptionAddRejectsWhitespaceInside(t *testing.T) {
 	repo := &stubSubscriptionRepo{}
-	svc := SubscriptionService{Repo: repo}
+	svc := NewSubscriptionService(repo)
 
 	if _, err := svc.Add("https://example.com/rss another"); err == nil {
 		t.Fatal("Expected error for whitespace in url")

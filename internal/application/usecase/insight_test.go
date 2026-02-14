@@ -21,7 +21,7 @@ func (s stubInsightGenerator) Generate(_ context.Context, _ InsightRequest) (Ins
 func TestInsightService_Generate(t *testing.T) {
 	tests := []struct {
 		name      string
-		service   InsightService
+		service   *InsightService
 		request   InsightRequest
 		wantErr   bool
 		wantTags  []string

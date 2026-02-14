@@ -43,6 +43,8 @@ This document provides context for AI agents working on the Reazy codebase.
 - **Configuration**: Uses `alecthomas/kong` for configuration parsing and defaults, with a custom YAML loader. Settings are loaded via infrastructure store and passed explicitly.
 - **Dependency Injection**: Use variables like `feed.ParserFunc` to mock external dependencies (network calls) in tests.
 - **AI Insights**: Insight generation belongs to Application usecases and depends on abstract text-generation clients. Infrastructure only provides concrete AI clients (currently Codex CLI via `codex.*` config).
+- **News Tab**: `internal://news` is a built-in virtual feed that shows AI-generated daily digest topic cards. Digest items are stored as `news_digest` and kept as date-grouped history.
+- **Date Sections**: Date section headers are applied to normal article lists (`All Feeds` / `Bookmarks` / each feed), not to `News`.
 
 ## Tools
 - `xc`: Task runner. Use `xc [task]` to run predefined tasks.

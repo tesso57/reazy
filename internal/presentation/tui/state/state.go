@@ -14,6 +14,7 @@ type Session int
 const (
 	FeedView Session = iota
 	ArticleView
+	NewsTopicView
 	DetailView
 	AddingFeedView
 	DeleteFeedView

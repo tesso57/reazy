@@ -32,10 +32,9 @@ func Render(p Props) string {
 		PaddingBottom(1).
 		Foreground(lipgloss.Color("205")) // Use same color as spinner/active border for consistency
 
-	titleWidth := p.Width - 3 // reserve right border + left padding
-	if titleWidth < 0 {
-		titleWidth = 0
-	}
+	titleWidth := max(
+		// reserve right border + left padding
+		p.Width-3, 0)
 	title := textutil.Truncate(textutil.SingleLine(p.Title), titleWidth)
 
 	return sidebarStyle.Render(lipgloss.JoinVertical(

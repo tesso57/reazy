@@ -88,7 +88,7 @@ func normalizeFeeds(feeds []string) []string {
 	}
 	normalized := make([]string, 0, len(feeds))
 	for _, feed := range feeds {
-		for _, item := range strings.Fields(feed) {
+		for item := range strings.FieldsSeq(feed) {
 			if item != "" {
 				normalized = append(normalized, item)
 			}
@@ -98,7 +98,7 @@ func normalizeFeeds(feeds []string) []string {
 }
 
 func yamlKongLoader(r io.Reader) (kong.Resolver, error) {
-	values := map[string]interface{}{}
+	values := map[string]any{}
 	if err := yaml.NewDecoder(r).Decode(&values); err != nil {
 		if err == io.EOF {
 			return nil, nil // Return nil resolver (no op)
@@ -106,7 +106,7 @@ func yamlKongLoader(r io.Reader) (kong.Resolver, error) {
 		return nil, err
 	}
 
-	var f kong.ResolverFunc = func(_ *kong.Context, _ *kong.Path, flag *kong.Flag) (interface{}, error) {
+	var f kong.ResolverFunc = func(_ *kong.Context, _ *kong.Path, flag *kong.Flag) (any, error) {
 		// Try various naming conventions
 		names := []string{flag.Name, strings.ReplaceAll(flag.Name, "-", "_")}
 		for _, name := range names {
@@ -125,7 +125,7 @@ func yamlKongLoader(r io.Reader) (kong.Resolver, error) {
 							return v, nil
 						}
 					} else {
-						if nextMap, ok := curr[part].(map[string]interface{}); ok {
+						if nextMap, ok := curr[part].(map[string]any); ok {
 							curr = nextMap
 						} else {
 							break

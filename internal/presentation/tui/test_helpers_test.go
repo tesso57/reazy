@@ -78,6 +78,15 @@ func (s stubInsightGenerator) Generate(_ context.Context, _ usecase.InsightReque
 	return s.insight, s.err
 }
 
+type stubNewsDigestGenerator struct {
+	topics []usecase.NewsDigestTopic
+	err    error
+}
+
+func (s stubNewsDigestGenerator) Generate(_ context.Context, _ usecase.NewsDigestRequest) ([]usecase.NewsDigestTopic, error) {
+	return s.topics, s.err
+}
+
 func newTestModel(cfg settings.Settings, subsRepo usecase.SubscriptionRepository, historyRepo usecase.HistoryRepository, fetcher usecase.FeedFetcher) *Model {
 	subs := usecase.NewSubscriptionService(subsRepo)
 	readingSvc := usecase.NewReadingService(fetcher, historyRepo, nil)
@@ -91,8 +100,20 @@ func newTestModelWithInsightGenerator(
 	fetcher usecase.FeedFetcher,
 	insightGen usecase.InsightGenerator,
 ) *Model {
+	return newTestModelWithInsightAndNewsDigestGenerator(cfg, subsRepo, historyRepo, fetcher, insightGen, nil)
+}
+
+func newTestModelWithInsightAndNewsDigestGenerator(
+	cfg settings.Settings,
+	subsRepo usecase.SubscriptionRepository,
+	historyRepo usecase.HistoryRepository,
+	fetcher usecase.FeedFetcher,
+	insightGen usecase.InsightGenerator,
+	newsDigestGen usecase.NewsDigestGenerator,
+) *Model {
 	subs := usecase.NewSubscriptionService(subsRepo)
 	readingSvc := usecase.NewReadingService(fetcher, historyRepo, nil)
 	insightSvc := usecase.NewInsightService(insightGen, nil)
-	return NewModelWithInsights(cfg, subs, readingSvc, insightSvc)
+	newsSvc := usecase.NewNewsDigestService(newsDigestGen, nil, nil)
+	return NewModelWithServices(cfg, subs, readingSvc, insightSvc, newsSvc)
 }

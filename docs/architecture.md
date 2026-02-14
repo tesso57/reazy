@@ -28,7 +28,7 @@ Presentation層はユーザー入力を解釈し、画面状態を更新し、Ap
 
 #### Application
 Application層はユースケースの流れを組み立て、Domainを使って処理の手順を表現する。
-- `internal/application/usecase/`: UIが呼び出すユースケース（購読操作・取得・履歴反映・AI要約/タグ生成）と、AI要約/タグ向けのプロンプト生成・応答パースを扱う。
+- `internal/application/usecase/`: UIが呼び出すユースケース（購読操作・取得・履歴反映・AI要約/タグ生成・日次AIニュースダイジェスト生成）と、AI向けプロンプト生成・応答パースを扱う。
 - `internal/application/settings/`: 設定値の型（keymap/theme/feeds など）。
 
 #### Domain
@@ -65,6 +65,7 @@ internal/
       subscription.go
       insight.go
       insight_generator.go
+      news_digest.go
 
   infrastructure/
     feed/
@@ -140,6 +141,11 @@ UIに表示             Reducer (State update)
   - Command: GenerateInsight(AI client abstraction -> Codex subprocess)
   - Msg: InsightGenerated
   - State更新（History + 記事表示）→ SaveHistory → Render
+- Newsタブ表示
+  - Intent: OpenFeed(`internal://news`)
+  - Command: FetchFeed(registered feedsを集約) -> GenerateDailyNewsDigest(当日記事をAIトピック化)
+  - Msg: FeedFetched -> NewsDigestGenerated
+  - State更新（digest cacheをHistoryへ日付単位で保存）→ Newsは日付グループ付きトピックカード履歴を表示 / 通常一覧は日付セクション表示
 
 ### Migration Guide (v0 -> v1)
 移行を段階化して、動作を維持しながら責務を分離していくためのガイドです。

@@ -5,17 +5,50 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/tesso57/reazy/internal/domain/reading"
 )
 
-func TestBuildArticleListItems(t *testing.T) {
-	now := time.Now()
+func TestBuildFeedListItems(t *testing.T) {
+	items := BuildFeedListItems([]string{
+		"https://example.com/feed1.xml",
+		"https://example.com/feed2.xml",
+	})
+
+	if len(items) != 5 {
+		t.Fatalf("len(items) = %d, want 5", len(items))
+	}
+
+	assertItem := func(index int, wantTitle, wantLink string) {
+		t.Helper()
+		item, ok := items[index].(*Item)
+		if !ok {
+			t.Fatalf("items[%d] should be *Item", index)
+		}
+		if item.TitleText != wantTitle {
+			t.Fatalf("items[%d].TitleText = %q, want %q", index, item.TitleText, wantTitle)
+		}
+		if item.Link != wantLink {
+			t.Fatalf("items[%d].Link = %q, want %q", index, item.Link, wantLink)
+		}
+	}
+
+	assertItem(0, "0. * All Feeds", reading.AllFeedsURL)
+	assertItem(1, "1. * News", reading.NewsURL)
+	assertItem(2, "2. * Bookmarks", reading.BookmarksURL)
+	assertItem(3, "3. https://example.com/feed1.xml", "https://example.com/feed1.xml")
+	assertItem(4, "4. https://example.com/feed2.xml", "https://example.com/feed2.xml")
+}
+
+func TestBuildArticleListItems_AddsDateSections(t *testing.T) {
+	tz := time.FixedZone("JST", 9*60*60)
 	history := reading.NewHistory(map[string]*reading.HistoryItem{
 		"guid1": {
 			GUID:        "guid1",
+			Kind:        reading.ArticleKind,
 			Title:       "Article One",
 			Link:        "http://example.com/1",
-			Date:        now,
+			Date:        time.Date(2026, 2, 14, 10, 0, 0, 0, tz),
 			FeedURL:     "http://example.com/feed",
 			FeedTitle:   "My Feed",
 			Description: "Desc 1",
@@ -23,47 +56,187 @@ func TestBuildArticleListItems(t *testing.T) {
 		},
 		"guid2": {
 			GUID:        "guid2",
+			Kind:        reading.ArticleKind,
 			Title:       "Article Two",
 			Link:        "http://example.com/2",
-			Date:        now.Add(-1 * time.Hour),
+			Date:        time.Date(2026, 2, 14, 8, 0, 0, 0, tz),
 			FeedURL:     "http://example.com/feed",
 			FeedTitle:   "My Feed",
 			Description: "Desc 2",
 			Content:     "Content 2",
 		},
+		"guid3": {
+			GUID:      "guid3",
+			Kind:      reading.ArticleKind,
+			Title:     "Older",
+			Link:      "http://example.com/3",
+			Date:      time.Date(2026, 2, 13, 20, 0, 0, 0, tz),
+			FeedURL:   "http://example.com/feed",
+			FeedTitle: "My Feed",
+		},
+		"d1": {
+			GUID:       "d1",
+			Kind:       reading.NewsDigestKind,
+			DigestDate: "2026-02-14",
+			FeedURL:    reading.NewsURL,
+			Title:      "Digest should be hidden",
+		},
 	})
 
-	// Test 1: Single Feed View
 	items := BuildArticleListItems(history, "http://example.com/feed")
+	if len(items) != 5 {
+		t.Fatalf("len(items) = %d, want 5", len(items))
+	}
+
+	section1 := items[0].(*Item)
+	if !section1.IsSectionHeader() {
+		t.Fatal("first item should be section header")
+	}
+	if !strings.Contains(section1.TitleText, "2026-02-14") {
+		t.Fatalf("section title = %q, want 2026-02-14", section1.TitleText)
+	}
+
+	i1 := items[1].(*Item)
+	if i1.IsSectionHeader() || !strings.HasPrefix(i1.TitleText, "1. Article One") {
+		t.Fatalf("unexpected first article row: %#v", i1)
+	}
+}
+
+func TestBuildArticleListItems_AllFeedsIncludesFeedName(t *testing.T) {
+	now := time.Now()
+	history := reading.NewHistory(map[string]*reading.HistoryItem{
+		"guid1": {
+			GUID:      "guid1",
+			Kind:      reading.ArticleKind,
+			Title:     "Article One",
+			FeedURL:   "http://example.com/feed",
+			FeedTitle: "My Feed",
+			Date:      now,
+		},
+	})
+
+	items := BuildArticleListItems(history, reading.AllFeedsURL)
 	if len(items) != 2 {
-		t.Fatalf("Expected 2 items, got %d", len(items))
+		t.Fatalf("len(items) = %d, want 2", len(items))
 	}
-
-	// Check numbering (1. Article One)
-	// Sorted by date desc -> Article One is first (now), Article Two is second (now-1h)
-
-	i1 := items[0].(*Item)
-	if !strings.HasPrefix(i1.TitleText, "1. ") {
-		t.Errorf("Expected first item to start with '1. ', got '%s'", i1.TitleText)
+	i := items[1].(*Item)
+	if !strings.Contains(i.TitleText, "[My Feed]") {
+		t.Fatalf("title should include feed tag in all feeds: %q", i.TitleText)
 	}
-	if !strings.Contains(i1.TitleText, "Article One") {
-		t.Errorf("Expected first item to contain 'Article One', got '%s'", i1.TitleText)
-	}
+}
 
-	i2 := items[1].(*Item)
-	if !strings.HasPrefix(i2.TitleText, "2. ") {
-		t.Errorf("Expected second item to start with '2. ', got '%s'", i2.TitleText)
-	}
+func TestBuildArticleListItems_NewsShowsDigestHistoryByDate(t *testing.T) {
+	today := time.Now().In(time.Local).Format("2006-01-02")
+	yesterday := time.Now().In(time.Local).Add(-24 * time.Hour).Format("2006-01-02")
+	history := reading.NewHistory(map[string]*reading.HistoryItem{
+		"d_today": {
+			GUID:         "d_today",
+			Kind:         reading.NewsDigestKind,
+			DigestDate:   today,
+			Title:        "Today Topic",
+			Description:  "Summary",
+			RelatedGUIDs: []string{"a1"},
+			FeedURL:      reading.NewsURL,
+		},
+		"d_yesterday": {
+			GUID:       "d_yesterday",
+			Kind:       reading.NewsDigestKind,
+			DigestDate: yesterday,
+			Title:      "Yesterday Topic",
+			FeedURL:    reading.NewsURL,
+		},
+		"a1": {
+			GUID:    "a1",
+			Kind:    reading.ArticleKind,
+			Title:   "Article",
+			FeedURL: "feed1",
+		},
+	})
 
-	// Test 2: All Feeds View ([Feed Name] Title)
-	itemsAll := BuildArticleListItems(history, reading.AllFeedsURL)
-	if len(itemsAll) != 2 {
-		t.Fatalf("Expected 2 items, got %d", len(itemsAll))
+	items := BuildArticleListItems(history, reading.NewsURL)
+	if len(items) != 4 {
+		t.Fatalf("len(items) = %d, want 4", len(items))
 	}
+	sectionToday := items[0].(*Item)
+	if !sectionToday.IsSectionHeader() || !strings.Contains(sectionToday.TitleText, today) {
+		t.Fatalf("first section should be today, got %#v", sectionToday)
+	}
+	itemToday := items[1].(*Item)
+	if !itemToday.IsNewsDigest() {
+		t.Fatalf("item should be news digest: %#v", itemToday)
+	}
+	if itemToday.GUID != "d_today" {
+		t.Fatalf("digest guid = %q, want d_today", itemToday.GUID)
+	}
+	sectionYesterday := items[2].(*Item)
+	if !sectionYesterday.IsSectionHeader() || !strings.Contains(sectionYesterday.TitleText, yesterday) {
+		t.Fatalf("second section should be yesterday, got %#v", sectionYesterday)
+	}
+	itemYesterday := items[3].(*Item)
+	if itemYesterday.GUID != "d_yesterday" {
+		t.Fatalf("digest guid = %q, want d_yesterday", itemYesterday.GUID)
+	}
+}
 
-	iA1 := itemsAll[0].(*Item)
-	// Format: "1. [My Feed] Article One"
-	if !strings.HasPrefix(iA1.TitleText, "1. [My Feed] Article One") {
-		t.Errorf("Expected format '1. [My Feed] Article One', got '%s'", iA1.TitleText)
+func TestApplyArticleList_SelectsFirstNewsDigest(t *testing.T) {
+	today := time.Now().In(time.Local).Format("2006-01-02")
+	history := reading.NewHistory(map[string]*reading.HistoryItem{
+		"d1": {
+			GUID:       "d1",
+			Kind:       reading.NewsDigestKind,
+			DigestDate: today,
+			Title:      "Topic One",
+			FeedURL:    reading.NewsURL,
+		},
+		"d2": {
+			GUID:       "d2",
+			Kind:       reading.NewsDigestKind,
+			DigestDate: today,
+			Title:      "Topic Two",
+			FeedURL:    reading.NewsURL,
+		},
+	})
+
+	model := list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 20)
+	ApplyArticleList(&model, history, reading.NewsURL)
+
+	if model.Title != "News" {
+		t.Fatalf("model.Title = %q, want News", model.Title)
+	}
+	if model.Index() != 1 {
+		t.Fatalf("news selected index = %d, want 1", model.Index())
+	}
+}
+
+func TestApplyRelatedArticleList(t *testing.T) {
+	history := reading.NewHistory(map[string]*reading.HistoryItem{
+		"a1": {
+			GUID:      "a1",
+			Kind:      reading.ArticleKind,
+			Title:     "Article 1",
+			FeedTitle: "Feed 1",
+			FeedURL:   "feed1",
+		},
+		"a2": {
+			GUID:      "a2",
+			Kind:      reading.ArticleKind,
+			Title:     "Article 2",
+			FeedTitle: "Feed 2",
+			FeedURL:   "feed2",
+		},
+	})
+
+	model := list.New([]list.Item{}, list.NewDefaultDelegate(), 80, 20)
+	ApplyRelatedArticleList(&model, history, []string{"a2", "missing", "a1"})
+
+	if model.Title != "Related Articles" {
+		t.Fatalf("model.Title = %q, want Related Articles", model.Title)
+	}
+	if len(model.Items()) != 2 {
+		t.Fatalf("items len = %d, want 2", len(model.Items()))
+	}
+	first := model.Items()[0].(*Item)
+	if !strings.Contains(first.TitleText, "[Feed 2]") {
+		t.Fatalf("first related item should keep guid order with feed name: %q", first.TitleText)
 	}
 }

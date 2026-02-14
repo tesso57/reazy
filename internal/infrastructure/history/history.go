@@ -19,9 +19,9 @@ type Manager struct {
 
 // NewManager creates a new history manager.
 func NewManager(path string) *Manager {
-	return &Manager{
+	return new(Manager{
 		path: path,
-	}
+	})
 }
 
 // Load reads the JSONL file and returns a map of GUID -> HistoryItem.

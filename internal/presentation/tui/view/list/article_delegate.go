@@ -19,6 +19,7 @@ type ArticleItem interface {
 	IsBookmarked() bool
 	HasAISummary() bool
 	FeedTitle() string
+	IsSectionHeader() bool
 }
 
 // ArticleDelegate handles rendering of article items.
@@ -52,6 +53,13 @@ func (d *ArticleDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd {
 func (d *ArticleDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	i, ok := item.(ArticleItem)
 	if !ok {
+		return
+	}
+
+	if i.IsSectionHeader() {
+		style := itemStyle(d.Styles, m, index).Bold(true).Foreground(lipgloss.Color("246"))
+		title := truncateItemText(m, style, i.Title())
+		renderItemText(w, style, title)
 		return
 	}
 

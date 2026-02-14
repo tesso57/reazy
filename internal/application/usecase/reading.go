@@ -27,38 +27,48 @@ type ReadingService struct {
 }
 
 // NewReadingService constructs a ReadingService.
-func NewReadingService(fetcher FeedFetcher, historyRepo HistoryRepository, now func() time.Time) ReadingService {
-	return ReadingService{
+func NewReadingService(fetcher FeedFetcher, historyRepo HistoryRepository, now func() time.Time) *ReadingService {
+	return new(ReadingService{
 		Fetcher:     fetcher,
 		HistoryRepo: historyRepo,
 		Now:         now,
-	}
+	})
 }
 
-// FetchFeed fetches a single feed or the aggregated "All Feeds".
-func (s ReadingService) FetchFeed(url string, all []string) (*reading.Feed, error) {
+// FetchFeed fetches a single feed or a virtual aggregated feed.
+func (s *ReadingService) FetchFeed(url string, all []string) (*reading.Feed, error) {
 	if url == reading.AllFeedsURL {
 		return s.Fetcher.FetchAll(all)
 	}
+	if url == reading.NewsURL {
+		feed, err := s.Fetcher.FetchAll(all)
+		if feed != nil {
+			feed.URL = reading.NewsURL
+			if feed.Title == "" {
+				feed.Title = "News"
+			}
+		}
+		return feed, err
+	}
 	if url == reading.BookmarksURL {
 		// Bookmarks are local, no fetch needed. Return empty feed or nil.
-		return &reading.Feed{
+		return new(reading.Feed{
 			Title: "Bookmarks",
 			URL:   reading.BookmarksURL,
 			Items: []reading.Item{},
-		}, nil
+		}), nil
 	}
 	return s.Fetcher.Fetch(url)
 }
 
 // LoadHistory loads history from persistence.
-func (s ReadingService) LoadHistory() (*reading.History, error) {
+func (s *ReadingService) LoadHistory() (*reading.History, error) {
 	items, err := s.HistoryRepo.Load()
 	return reading.NewHistory(items), err
 }
 
 // SaveHistory persists the current history snapshot.
-func (s ReadingService) SaveHistory(history *reading.History) error {
+func (s *ReadingService) SaveHistory(history *reading.History) error {
 	if history == nil {
 		return nil
 	}
@@ -66,7 +76,7 @@ func (s ReadingService) SaveHistory(history *reading.History) error {
 }
 
 // MergeHistory merges fetched feed items into history.
-func (s ReadingService) MergeHistory(history *reading.History, feed *reading.Feed) {
+func (s *ReadingService) MergeHistory(history *reading.History, feed *reading.Feed) {
 	if history == nil {
 		return
 	}
@@ -74,7 +84,7 @@ func (s ReadingService) MergeHistory(history *reading.History, feed *reading.Fee
 }
 
 // ToggleBookmark toggles the bookmark status of an item and persists the change.
-func (s ReadingService) ToggleBookmark(history *reading.History, guid string) error {
+func (s *ReadingService) ToggleBookmark(history *reading.History, guid string) error {
 	if history == nil {
 		return nil
 	}
@@ -84,7 +94,7 @@ func (s ReadingService) ToggleBookmark(history *reading.History, guid string) er
 	return nil
 }
 
-func (s ReadingService) now() time.Time {
+func (s *ReadingService) now() time.Time {
 	if s.Now != nil {
 		return s.Now()
 	}

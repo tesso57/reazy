@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/tesso57/reazy/internal/presentation/tui/components/header"
 	main_view "github.com/tesso57/reazy/internal/presentation/tui/components/main"
@@ -36,7 +37,7 @@ func (m *Model) buildSidebarProps() sidebar.Props {
 }
 
 func (m *Model) buildHeaderProps() header.Props {
-	visible := headerVisible(m.state.Session)
+	visible := headerVisible(m.state)
 	var link, feedTitle string
 
 	if visible {
@@ -95,6 +96,8 @@ func (m *Model) buildMainProps() main_view.Props {
 		body = fmt.Sprintf("\n\n   %s %s", m.state.Spinner.View(), message)
 	case m.state.Session == state.DetailView:
 		body = m.state.Viewport.View()
+	case m.state.Session == state.NewsTopicView:
+		body = buildNewsTopicBody(m.state)
 	case m.state.Session == state.ArticleView || m.state.Session == state.FeedView:
 		body = m.state.ArticleList.View()
 	default:
@@ -105,7 +108,7 @@ func (m *Model) buildMainProps() main_view.Props {
 	}
 
 	headerHeight := 0
-	if headerVisible(m.state.Session) {
+	if headerVisible(m.state) {
 		headerHeight = metrics.HeaderLines
 	}
 
@@ -165,10 +168,54 @@ func (m *Model) buildFooterProps() string {
 	return state.FooterText(m.state.Session, m.state.Loading, m.state.AIStatus, helpText)
 }
 
-func headerVisible(session state.Session) bool {
-	return session == state.ArticleView || session == state.DetailView || session == state.FeedView
+func headerVisible(st *state.ModelState) bool {
+	if st == nil {
+		return false
+	}
+	switch st.Session {
+	case state.FeedView, state.DetailView:
+		return true
+	case state.ArticleView:
+		if item, ok := st.ArticleList.SelectedItem().(*presenter.Item); ok && item != nil && item.IsSectionHeader() {
+			return false
+		}
+		if item, ok := st.ArticleList.SelectedItem().(*presenter.Item); ok && item != nil && item.IsNewsDigest() {
+			return false
+		}
+		return true
+	case state.NewsTopicView:
+		return false
+	default:
+		return false
+	}
 }
 
 func headerLine(text string, width int) string {
 	return textutil.Truncate(textutil.SingleLine(text), width)
+}
+
+func buildNewsTopicBody(st *state.ModelState) string {
+	if st == nil {
+		return ""
+	}
+	title := strings.TrimSpace(st.NewsTopicTitle)
+	if title == "" {
+		title = "Daily News Topic"
+	}
+	summary := strings.TrimSpace(st.NewsTopicSummary)
+	if summary == "" {
+		summary = "(No summary available.)"
+	}
+	tags := ""
+	if len(st.NewsTopicTags) > 0 {
+		tags = fmt.Sprintf("Tags: %s\n", strings.Join(st.NewsTopicTags, ", "))
+	}
+
+	return fmt.Sprintf(
+		"%s\n----------------------------------------\n%s%s\nRelated Articles\n%s",
+		title,
+		tags,
+		summary,
+		st.ArticleList.View(),
+	)
 }

@@ -23,8 +23,8 @@ func TestDeleteFeedDialog(t *testing.T) {
 		t.Error("Initial state should be feedView")
 	}
 
-	// Move to first feed (index 1, as 0 is "All Feeds")
-	m.state.FeedList.Select(1)
+	// Move to first custom feed (0: All, 1: News, 2: Bookmarks, 3: first feed)
+	m.state.FeedList.Select(3)
 	if _, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok {
 		t.Fatal("Should have selected an item")
 	}
@@ -62,7 +62,7 @@ func TestDeleteFeedDialog(t *testing.T) {
 
 	// 6. Confirm Delete ('y')
 	// Select item again just in case
-	m.state.FeedList.Select(1)
+	m.state.FeedList.Select(3)
 	// Enter delete view
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	m = tm.(*Model)

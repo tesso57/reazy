@@ -116,8 +116,8 @@ func TestHandleFeedViewKeys_AddDelete(t *testing.T) {
 	}
 
 	// Test 2: Delete Feed
-	// Select index 1 (http://example.com/1, because 0 is All)
-	m.state.FeedList.Select(1)
+	// Select first custom feed (0: All, 1: News, 2: Bookmarks, 3: first feed)
+	m.state.FeedList.Select(3)
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	m = tm.(*Model)
 	if m.state.Session != state.DeleteFeedView {
@@ -140,6 +140,23 @@ func TestHandleFeedViewKeys_AddDelete(t *testing.T) {
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	if len(tm.(*Model).state.FeedList.Items()) != ct {
 		t.Error("Should not allow deleting All Feeds tab")
+	}
+	if tm.(*Model).state.Session != state.FeedView {
+		t.Error("Should stay in feedView when deleting All Feeds tab")
+	}
+
+	// Test 4: Try Delete News tab (Index 1)
+	m.state.FeedList.Select(1)
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if tm.(*Model).state.Session != state.FeedView {
+		t.Error("Should not allow deleting News tab")
+	}
+
+	// Test 5: Try Delete Bookmarks tab (Index 2)
+	m.state.FeedList.Select(2)
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if tm.(*Model).state.Session != state.FeedView {
+		t.Error("Should not allow deleting Bookmarks tab")
 	}
 }
 
@@ -188,6 +205,49 @@ func TestHandleArticleViewKeys_MarkRead(t *testing.T) {
 	// Give background save goroutine time to release file handle
 	// to prevent cleanup errors on Windows/Mac
 	time.Sleep(100 * time.Millisecond)
+}
+
+func TestHandleArticleViewKeys_OpenSectionHeaderDoesNothing(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds:  []string{"http://example.com"},
+		KeyMap: settings.KeyMapConfig{Right: "l", Bookmark: "b", Summarize: "s"},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+
+	m.state.Session = state.ArticleView
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{
+			TitleText:     "== 2026-02-14 (2) ==",
+			SectionHeader: true,
+		},
+		&presenter.Item{
+			TitleText: "1. Headline",
+			GUID:      "guid-1",
+			Link:      "https://example.com/article",
+		},
+	})
+	m.state.ArticleList.Select(0)
+
+	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = tm.(*Model)
+	if m.state.Session != state.ArticleView {
+		t.Fatalf("session = %v, want article view", m.state.Session)
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+	m = tm.(*Model)
+	if m.state.Session != state.ArticleView {
+		t.Fatalf("session = %v, want article view after bookmark on section", m.state.Session)
+	}
+
+	tm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m = tm.(*Model)
+	if cmd != nil {
+		t.Fatal("summarize command should be nil on section header")
+	}
+	if m.state.Loading {
+		t.Fatal("loading should remain false on section header summarize")
+	}
 }
 
 func TestUpdateAddingFeedView_Esc(t *testing.T) {

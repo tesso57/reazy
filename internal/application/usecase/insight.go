@@ -38,21 +38,21 @@ type InsightService struct {
 }
 
 // NewInsightService constructs an InsightService.
-func NewInsightService(generator InsightGenerator, now func() time.Time) InsightService {
-	return InsightService{
+func NewInsightService(generator InsightGenerator, now func() time.Time) *InsightService {
+	return new(InsightService{
 		Generator: generator,
 		Now:       now,
-	}
+	})
 }
 
 // Enabled reports whether generation is available.
-func (s InsightService) Enabled() bool {
-	return s.Generator != nil
+func (s *InsightService) Enabled() bool {
+	return s != nil && s.Generator != nil
 }
 
 // Generate runs insight generation for the given request.
-func (s InsightService) Generate(ctx context.Context, req InsightRequest) (Insight, error) {
-	if s.Generator == nil {
+func (s *InsightService) Generate(ctx context.Context, req InsightRequest) (Insight, error) {
+	if s == nil || s.Generator == nil {
 		return Insight{}, errors.New("codex integration is disabled")
 	}
 	if strings.TrimSpace(req.Title) == "" && strings.TrimSpace(req.Content) == "" && strings.TrimSpace(req.Description) == "" {
@@ -73,15 +73,15 @@ func (s InsightService) Generate(ctx context.Context, req InsightRequest) (Insig
 }
 
 // ApplyToHistory updates one article in history with generated insight.
-func (s InsightService) ApplyToHistory(history *reading.History, guid string, insight Insight) bool {
-	if history == nil {
+func (s *InsightService) ApplyToHistory(history *reading.History, guid string, insight Insight) bool {
+	if s == nil || history == nil {
 		return false
 	}
 	return history.SetInsight(guid, insight.Summary, insight.Tags, s.now())
 }
 
-func (s InsightService) now() time.Time {
-	if s.Now != nil {
+func (s *InsightService) now() time.Time {
+	if s != nil && s.Now != nil {
 		return s.Now()
 	}
 	return time.Now()
