@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func TestAtomParsing(t *testing.T) {
 	originalParser := ParserFunc
 	defer func() { ParserFunc = originalParser }()
 
-	ParserFunc = func(url string) (*gofeed.Feed, error) {
+	ParserFunc = func(_ context.Context, url string) (*gofeed.Feed, error) {
 		fp := gofeed.NewParser()
 		return fp.ParseString(atomContent)
 	}

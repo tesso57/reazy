@@ -16,7 +16,7 @@ func TestDeleteFeedDialog(t *testing.T) {
 			DeleteFeed: "x",
 		},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	// 1. Initial State
 	if m.state.Session != state.FeedView {

@@ -44,10 +44,32 @@ func TestLoad_Defaults(t *testing.T) {
 	if store.Settings.Codex.TimeoutSeconds != 30 {
 		t.Errorf("Expected default Codex.TimeoutSeconds 30, got %d", store.Settings.Codex.TimeoutSeconds)
 	}
+	if filepath.Base(store.Settings.HistoryFile) != "history.db" {
+		t.Errorf("Expected default history db path, got %q", store.Settings.HistoryFile)
+	}
 
 	// Verify file was created
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Error("Config file not created")
+	}
+}
+
+func TestLoad_NormalizesLegacyJSONLHistoryPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	content := "history_file: " + filepath.Join(tmpDir, "history.jsonl") + "\n"
+	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	store, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	want := filepath.Join(tmpDir, "history.db")
+	if store.Settings.HistoryFile != want {
+		t.Fatalf("HistoryFile = %q, want %q", store.Settings.HistoryFile, want)
 	}
 }
 

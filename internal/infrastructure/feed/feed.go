@@ -3,6 +3,7 @@ package feed
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
+	"github.com/tesso57/reazy/internal/application/usecase"
 	"github.com/tesso57/reazy/internal/domain/reading"
 )
 
@@ -35,9 +37,7 @@ func (t acceptTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 // It allows mocking the feed parsing logic.
 var ParserFunc = defaultParser
 
-func defaultParser(url string) (*gofeed.Feed, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func defaultParser(ctx context.Context, url string) (*gofeed.Feed, error) {
 	fp := gofeed.NewParser()
 	fp.UserAgent = "Reazy/1.0"
 	fp.Client = &http.Client{Transport: acceptTransport{base: http.DefaultTransport}}
@@ -46,8 +46,30 @@ func defaultParser(url string) (*gofeed.Feed, error) {
 
 // Fetch parses a feed from the given URL.
 func Fetch(url string) (*reading.Feed, error) {
+	return FetchWithTimeout(url, 10*time.Second)
+}
+
+// FetchWithTimeout parses a feed from the given URL with timeout.
+func FetchWithTimeout(url string, timeout time.Duration) (*reading.Feed, error) {
+	ctx := context.Background()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	return FetchWithContext(ctx, url)
+}
+
+// FetchWithContext parses a feed from the given URL with context.
+func FetchWithContext(ctx context.Context, url string) (*reading.Feed, error) {
 	url = strings.TrimSpace(url)
-	parsed, err := ParserFunc(url)
+	if url == "" {
+		return nil, errors.New("feed url is empty")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	parsed, err := ParserFunc(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -87,19 +109,48 @@ func Fetch(url string) (*reading.Feed, error) {
 }
 
 // FetchAll parses multiple feeds concurrently and aggregates items.
-func FetchAll(urls []string) (*reading.Feed, error) {
+func FetchAll(urls []string, opt usecase.FeedFetchOptions) (*reading.Feed, usecase.FeedFetchReport, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var allItems []reading.Item
+	report := usecase.FeedFetchReport{Requested: len(urls)}
+
+	batchCtx := context.Background()
+	var batchCancel context.CancelFunc
+	if opt.BatchTimeout > 0 {
+		batchCtx, batchCancel = context.WithTimeout(batchCtx, opt.BatchTimeout)
+		defer batchCancel()
+	}
 
 	for _, url := range urls {
+		url := strings.TrimSpace(url)
+		if url == "" {
+			continue
+		}
 		wg.Go(func() {
-			f, err := Fetch(url)
-			if err == nil {
-				mu.Lock()
-				allItems = append(allItems, f.Items...)
-				mu.Unlock()
+			feedCtx := batchCtx
+			var cancel context.CancelFunc
+			if opt.PerFeedTimeout > 0 {
+				feedCtx, cancel = context.WithTimeout(batchCtx, opt.PerFeedTimeout)
 			}
+			if cancel != nil {
+				defer cancel()
+			}
+
+			f, err := FetchWithContext(feedCtx, url)
+			mu.Lock()
+			defer mu.Unlock()
+
+			if err == nil && f != nil {
+				report.Succeeded++
+				allItems = append(allItems, f.Items...)
+				return
+			}
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				report.TimedOut++
+				return
+			}
+			report.Failed++
 		})
 	}
 	wg.Wait()
@@ -113,7 +164,7 @@ func FetchAll(urls []string) (*reading.Feed, error) {
 		Title: "All Feeds",
 		URL:   reading.AllFeedsURL,
 		Items: allItems,
-	}), nil
+	}), report, nil
 }
 
 // Fetcher implements the usecase.FeedFetcher interface.
@@ -125,6 +176,6 @@ func (Fetcher) Fetch(url string) (*reading.Feed, error) {
 }
 
 // FetchAll fetches and aggregates multiple feeds.
-func (Fetcher) FetchAll(urls []string) (*reading.Feed, error) {
-	return FetchAll(urls)
+func (Fetcher) FetchAll(urls []string, opt usecase.FeedFetchOptions) (*reading.Feed, usecase.FeedFetchReport, error) {
+	return FetchAll(urls, opt)
 }

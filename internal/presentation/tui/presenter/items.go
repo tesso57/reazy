@@ -31,6 +31,7 @@ type Item struct {
 	Kind          string
 	RelatedGUIDs  []string
 	SectionHeader bool
+	BodyHydrated  bool
 }
 
 const (
@@ -191,6 +192,7 @@ func buildArticleItem(index int, it *reading.HistoryItem, showFeedTitle bool) *I
 		FeedURL:       it.FeedURL,
 		Kind:          kindOrDefault(it.Kind),
 		RelatedGUIDs:  append([]string(nil), it.RelatedGUIDs...),
+		BodyHydrated:  it.BodyHydrated,
 	}
 }
 
@@ -300,6 +302,7 @@ func buildNewsDigestItem(index int, it *reading.HistoryItem) *Item {
 		FeedURL:       reading.NewsURL,
 		Kind:          reading.NewsDigestKind,
 		RelatedGUIDs:  append([]string(nil), it.RelatedGUIDs...),
+		BodyHydrated:  true,
 	}
 }
 

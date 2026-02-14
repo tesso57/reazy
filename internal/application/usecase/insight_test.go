@@ -6,16 +6,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/tesso57/reazy/internal/domain/reading"
 )
 
-type stubInsightGenerator struct {
-	insight Insight
-	err     error
+type mockInsightGenerator struct {
+	mock.Mock
 }
 
-func (s stubInsightGenerator) Generate(_ context.Context, _ InsightRequest) (Insight, error) {
-	return s.insight, s.err
+func (m *mockInsightGenerator) Generate(ctx context.Context, req InsightRequest) (Insight, error) {
+	args := m.Called(ctx, req)
+	insight, _ := args.Get(0).(Insight)
+	return insight, args.Error(1)
 }
 
 func TestInsightService_Generate(t *testing.T) {
@@ -35,63 +37,71 @@ func TestInsightService_Generate(t *testing.T) {
 		},
 		{
 			name:    "empty input",
-			service: NewInsightService(stubInsightGenerator{}, nil),
+			service: NewInsightService(&mockInsightGenerator{}, nil),
 			request: InsightRequest{},
 			wantErr: true,
-		},
-		{
-			name: "generator error",
-			service: NewInsightService(stubInsightGenerator{
-				err: errors.New("boom"),
-			}, nil),
-			request: InsightRequest{Title: "t"},
-			wantErr: true,
-		},
-		{
-			name: "empty summary returned",
-			service: NewInsightService(stubInsightGenerator{
-				insight: Insight{Summary: " ", Tags: []string{"go"}},
-			}, nil),
-			request: InsightRequest{Title: "t"},
-			wantErr: true,
-		},
-		{
-			name: "success with tag normalization",
-			service: NewInsightService(stubInsightGenerator{
-				insight: Insight{
-					Summary: " concise summary ",
-					Tags:    []string{"Go", " go ", "RSS", ""},
-				},
-			}, nil),
-			request:   InsightRequest{Title: "t"},
-			wantErr:   false,
-			wantTags:  []string{"Go", "RSS"},
-			wantBrief: "concise summary",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.service.Generate(context.Background(), tt.request)
+			_, err := tt.service.Generate(context.Background(), tt.request)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Generate() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if tt.wantErr {
-				return
-			}
-			if got.Summary != tt.wantBrief {
-				t.Fatalf("Summary = %q, want %q", got.Summary, tt.wantBrief)
-			}
-			if len(got.Tags) != len(tt.wantTags) {
-				t.Fatalf("Tags len = %d, want %d", len(got.Tags), len(tt.wantTags))
-			}
-			for i := range got.Tags {
-				if got.Tags[i] != tt.wantTags[i] {
-					t.Fatalf("Tags[%d] = %q, want %q", i, got.Tags[i], tt.wantTags[i])
-				}
-			}
 		})
 	}
+
+	t.Run("generator error", func(t *testing.T) {
+		gen := &mockInsightGenerator{}
+		svc := NewInsightService(gen, nil)
+		gen.On("Generate", mock.Anything, InsightRequest{Title: "t"}).Return(Insight{}, errors.New("boom")).Once()
+
+		_, err := svc.Generate(context.Background(), InsightRequest{Title: "t"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		gen.AssertExpectations(t)
+	})
+
+	t.Run("empty summary returned", func(t *testing.T) {
+		gen := &mockInsightGenerator{}
+		svc := NewInsightService(gen, nil)
+		gen.On("Generate", mock.Anything, InsightRequest{Title: "t"}).Return(Insight{Summary: " ", Tags: []string{"go"}}, nil).Once()
+
+		_, err := svc.Generate(context.Background(), InsightRequest{Title: "t"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		gen.AssertExpectations(t)
+	})
+
+	t.Run("success with tag normalization", func(t *testing.T) {
+		gen := &mockInsightGenerator{}
+		svc := NewInsightService(gen, nil)
+		gen.On("Generate", mock.Anything, InsightRequest{Title: "t"}).Return(Insight{
+			Summary: " concise summary ",
+			Tags:    []string{"Go", " go ", "RSS", ""},
+		}, nil).Once()
+
+		got, err := svc.Generate(context.Background(), InsightRequest{Title: "t"})
+		if err != nil {
+			t.Fatalf("Generate() error = %v", err)
+		}
+		if got.Summary != "concise summary" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "concise summary")
+		}
+		wantTags := []string{"Go", "RSS"}
+		if len(got.Tags) != len(wantTags) {
+			t.Fatalf("Tags len = %d, want %d", len(got.Tags), len(wantTags))
+		}
+		for i := range got.Tags {
+			if got.Tags[i] != wantTags[i] {
+				t.Fatalf("Tags[%d] = %q, want %q", i, got.Tags[i], wantTags[i])
+			}
+		}
+		gen.AssertExpectations(t)
+	})
 }
 
 func TestInsightService_ApplyToHistory(t *testing.T) {

@@ -5,23 +5,23 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/mock"
 )
 
-type stubTextGenerator struct {
-	output string
-	err    error
-	prompt string
+type mockTextGenerator struct {
+	mock.Mock
 }
 
-func (s *stubTextGenerator) Generate(_ context.Context, prompt string) (string, error) {
-	s.prompt = prompt
-	return s.output, s.err
+func (m *mockTextGenerator) Generate(ctx context.Context, prompt string) (string, error) {
+	args := m.Called(ctx, prompt)
+	out, _ := args.Get(0).(string)
+	return out, args.Error(1)
 }
 
 func TestPromptInsightGenerator_Generate(t *testing.T) {
-	client := &stubTextGenerator{
-		output: `{"summary":"short","tags":["go","rss"]}`,
-	}
+	client := &mockTextGenerator{}
+	client.On("Generate", mock.Anything, mock.AnythingOfType("string")).Return(`{"summary":"short","tags":["go","rss"]}`, nil).Once()
 	generator := NewPromptInsightGenerator(client)
 
 	got, err := generator.Generate(context.Background(), InsightRequest{
@@ -39,21 +39,27 @@ func TestPromptInsightGenerator_Generate(t *testing.T) {
 	if len(got.Tags) != 2 || got.Tags[0] != "go" || got.Tags[1] != "rss" {
 		t.Fatalf("tags = %#v, want [go rss]", got.Tags)
 	}
-	if !strings.Contains(client.prompt, "Article JSON:") {
-		t.Fatalf("prompt missing article payload: %q", client.prompt)
+
+	calls := client.Calls
+	if len(calls) != 1 {
+		t.Fatalf("expected one Generate call, got %d", len(calls))
 	}
-	if !strings.Contains(client.prompt, "summary: in Japanese (ja-JP), readable in about 3 minutes") {
-		t.Fatalf("prompt missing summary duration rule: %q", client.prompt)
+	prompt, _ := calls[0].Arguments.Get(1).(string)
+	if !strings.Contains(prompt, "Article JSON:") {
+		t.Fatalf("prompt missing article payload: %q", prompt)
 	}
-	if !strings.Contains(client.prompt, "tags: 3 to 8 short tags in English") {
-		t.Fatalf("prompt missing tags language rule: %q", client.prompt)
+	if !strings.Contains(prompt, "summary: in Japanese (ja-JP), readable in about 3 minutes") {
+		t.Fatalf("prompt missing summary duration rule: %q", prompt)
 	}
+	if !strings.Contains(prompt, "tags: 3 to 8 short tags in English") {
+		t.Fatalf("prompt missing tags language rule: %q", prompt)
+	}
+	client.AssertExpectations(t)
 }
 
 func TestPromptInsightGenerator_ParseOutputWithNoise(t *testing.T) {
-	client := &stubTextGenerator{
-		output: "warning line\n{\"summary\":\"ok\",\"tags\":[\"a\",\"b\"]}\n",
-	}
+	client := &mockTextGenerator{}
+	client.On("Generate", mock.Anything, mock.AnythingOfType("string")).Return("warning line\n{\"summary\":\"ok\",\"tags\":[\"a\",\"b\"]}\n", nil).Once()
 	generator := NewPromptInsightGenerator(client)
 
 	got, err := generator.Generate(context.Background(), InsightRequest{Title: "x"})
@@ -63,46 +69,42 @@ func TestPromptInsightGenerator_ParseOutputWithNoise(t *testing.T) {
 	if got.Summary != "ok" {
 		t.Fatalf("summary = %q, want %q", got.Summary, "ok")
 	}
+	client.AssertExpectations(t)
 }
 
 func TestPromptInsightGenerator_GenerateErrors(t *testing.T) {
 	tests := []struct {
 		name     string
 		noClient bool
-		client   *stubTextGenerator
+		output   string
+		err      error
 		wantErr  bool
 	}{
-		{
-			name:     "no client",
-			noClient: true,
-			wantErr:  true,
-		},
-		{
-			name: "client error",
-			client: &stubTextGenerator{
-				err: errors.New("provider error"),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid json",
-			client: &stubTextGenerator{
-				output: "not json",
-			},
-			wantErr: true,
-		},
+		{name: "no client", noClient: true, wantErr: true},
+		{name: "client error", err: errors.New("provider error"), wantErr: true},
+		{name: "invalid json", output: "not json", wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			generator := NewPromptInsightGenerator(TextGenerator(tt.client))
 			if tt.noClient {
-				generator = NewPromptInsightGenerator(nil)
+				generator := NewPromptInsightGenerator(nil)
+				_, err := generator.Generate(context.Background(), InsightRequest{Title: "x"})
+				if (err != nil) != tt.wantErr {
+					t.Fatalf("Generate() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				return
 			}
+
+			client := &mockTextGenerator{}
+			client.On("Generate", mock.Anything, mock.AnythingOfType("string")).Return(tt.output, tt.err).Once()
+			generator := NewPromptInsightGenerator(client)
+
 			_, err := generator.Generate(context.Background(), InsightRequest{Title: "x"})
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Generate() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			client.AssertExpectations(t)
 		})
 	}
 }

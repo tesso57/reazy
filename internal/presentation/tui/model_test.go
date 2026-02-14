@@ -26,7 +26,7 @@ func TestNewModel(t *testing.T) {
 			Up: "k",
 		},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	if m.state.Session != state.FeedView {
 		t.Error("Expected initial state to be feedView")
@@ -97,7 +97,7 @@ func TestUpdate(t *testing.T) {
 			UpPage: "pgup", DownPage: "pgdn",
 		},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	// Test Resize
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
@@ -392,7 +392,7 @@ func TestDetailViewHeaderVisibleWithAISummary(t *testing.T) {
 			Right: "l",
 		},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(*Model)
@@ -452,7 +452,7 @@ func TestArticleViewHeaderAndSidebarVisibleWithAIStatusFooter(t *testing.T) {
 	cfg := settings.Settings{
 		Feeds: []string{"http://example.com"},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(*Model)
@@ -507,7 +507,7 @@ func TestSidebarTitleVisibleDuringFilterInput(t *testing.T) {
 			"https://example.com/feed3.xml",
 		},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = tm.(*Model)
@@ -542,7 +542,7 @@ func TestArticleViewHeaderHiddenForNewsSectionHeader(t *testing.T) {
 	cfg := settings.Settings{
 		Feeds: []string{"http://example.com"},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(*Model)
@@ -568,7 +568,7 @@ func TestArticleViewHeaderHiddenForNewsSectionHeader(t *testing.T) {
 
 func TestFetchFeedCmd(t *testing.T) {
 	cfg := settings.Settings{Feeds: []string{"http://example.com"}}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	// Invoke cmd
 	cmd := update.FetchFeedCmd(m.reading, "http://example.com", m.state.Feeds)
@@ -644,7 +644,7 @@ func TestHistoryIntegration(t *testing.T) {
 			Date:    time.Now().Add(-2 * time.Hour),
 		},
 	}
-	_ = hm.Save(preItems)
+	_ = hm.Upsert(preItems)
 
 	// Setup Config
 	cfg := settings.Settings{
@@ -653,7 +653,7 @@ func TestHistoryIntegration(t *testing.T) {
 		KeyMap:      settings.KeyMapConfig{Right: "l"},
 	}
 
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, hm, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, hm, &stubFeedFetcher{})
 
 	// Check if history loaded
 	if len(m.state.History.Items()) != 2 {
@@ -692,8 +692,8 @@ func TestHistoryIntegration(t *testing.T) {
 
 	update.HandleFeedFetchedMsg(m.state, msg, m.deps())
 
-		// Verify Article List
-		// Should contain section headers + 3 articles.
+	// Verify Article List
+	// Should contain section headers + 3 articles.
 	// Sorted by Date logic?
 	// NewItem (Now), Merged (Now from fetch? Or history? We overwrite history date with fetch?)
 	// Logic: if exists, we update missing FeedURL, but we didn't update Date.

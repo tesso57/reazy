@@ -145,6 +145,11 @@ func (s *NewsDigestService) todayDateKey() string {
 	return s.now().In(s.location()).Format("2006-01-02")
 }
 
+// TodayDateKey returns the date key used for digest generation.
+func (s *NewsDigestService) TodayDateKey() string {
+	return s.todayDateKey()
+}
+
 func buildNewsDigestRequest(dateKey string, articles []*reading.HistoryItem) NewsDigestRequest {
 	result := NewsDigestRequest{
 		DateKey:  dateKey,

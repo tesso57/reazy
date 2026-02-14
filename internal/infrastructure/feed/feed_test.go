@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mmcdole/gofeed"
+	"github.com/tesso57/reazy/internal/application/usecase"
 )
 
 // Mock Fetching interaction integration tests would require external mocking.
@@ -21,7 +23,7 @@ import (
 // Test default parser func coverage
 func TestDefaultParser(t *testing.T) {
 	// Just call it with bad URL to verify it calls gofeed
-	_, err := ParserFunc("invalid-url")
+	_, err := ParserFunc(context.Background(), "invalid-url")
 	if err == nil {
 		t.Log("Expected error from default parser")
 	}
@@ -51,7 +53,7 @@ func TestDefaultParserHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := defaultParser(server.URL)
+	_, err := defaultParser(context.Background(), server.URL)
 	if err != nil {
 		t.Fatalf("default parser failed: %v", err)
 	}
@@ -77,7 +79,7 @@ func TestFetch(t *testing.T) {
 				{Title: "Item 1", Description: "Desc 1", Content: "Content 1", Link: "http://link1.com", GUID: "guid-1", Published: "2023-01-01"},
 			},
 		}
-		ParserFunc = func(_ string) (*gofeed.Feed, error) {
+		ParserFunc = func(_ context.Context, _ string) (*gofeed.Feed, error) {
 			return mockFeed, nil
 		}
 
@@ -112,7 +114,7 @@ func TestFetch(t *testing.T) {
 				{Title: "Item 1", Link: "http://link1.com", Published: "", Updated: "2023-01-02"},
 			},
 		}
-		ParserFunc = func(_ string) (*gofeed.Feed, error) {
+		ParserFunc = func(_ context.Context, _ string) (*gofeed.Feed, error) {
 			return mockFeed, nil
 		}
 
@@ -126,7 +128,7 @@ func TestFetch(t *testing.T) {
 	})
 
 	t.Run("Failure", func(t *testing.T) {
-		ParserFunc = func(_ string) (*gofeed.Feed, error) {
+		ParserFunc = func(_ context.Context, _ string) (*gofeed.Feed, error) {
 			return nil, gofeed.HTTPError{StatusCode: 404, Status: "Not Found"}
 		}
 		_, err := Fetch("http://example.com")
@@ -141,7 +143,7 @@ func TestFetchTrimsWhitespace(t *testing.T) {
 	defer func() { ParserFunc = originalParser }()
 
 	var gotURL string
-	ParserFunc = func(url string) (*gofeed.Feed, error) {
+	ParserFunc = func(_ context.Context, url string) (*gofeed.Feed, error) {
 		gotURL = url
 		return &gofeed.Feed{Title: "Trimmed", Items: []*gofeed.Item{}}, nil
 	}
@@ -163,7 +165,7 @@ func TestFetchAll(t *testing.T) {
 	originalParser := ParserFunc
 	defer func() { ParserFunc = originalParser }()
 
-	ParserFunc = func(url string) (*gofeed.Feed, error) {
+	ParserFunc = func(_ context.Context, url string) (*gofeed.Feed, error) {
 		if url == "site1" {
 			now := time.Now()
 			return &gofeed.Feed{
@@ -186,9 +188,15 @@ func TestFetchAll(t *testing.T) {
 	}
 
 	urls := []string{"site1", "site2", "error_site"}
-	f, err := FetchAll(urls)
+	f, report, err := FetchAll(urls, usecase.FeedFetchOptions{
+		PerFeedTimeout: 5 * time.Second,
+		BatchTimeout:   5 * time.Second,
+	})
 	if err != nil {
 		t.Fatalf("FetchAll failed: %v", err)
+	}
+	if report.Requested != 3 || report.Succeeded != 2 || report.Failed != 1 {
+		t.Fatalf("unexpected report: %+v", report)
 	}
 
 	if len(f.Items) != 2 {

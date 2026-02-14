@@ -59,24 +59,18 @@ func Load(customPath ...string) (*Store, error) {
 
 	store.Settings = cfg
 	store.Settings.Feeds = normalizeFeeds(store.Settings.Feeds)
+	store.Settings.HistoryFile = normalizeHistoryPath(store.Settings.HistoryFile)
+
+	// Set default history path if empty.
+	if store.Settings.HistoryFile == "" {
+		store.Settings.HistoryFile = filepath.Join(defaultDataHome(), "reazy", "history.db")
+	}
 
 	// Save defaults if new file
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		if err := store.Save(); err != nil {
 			return nil, fmt.Errorf("failed to save default config: %w", err)
 		}
-	}
-
-	// Set default history path if empty
-	if store.Settings.HistoryFile == "" {
-		dataHome := os.Getenv("XDG_DATA_HOME")
-		if dataHome == "" {
-			home, err := os.UserHomeDir()
-			if err == nil {
-				dataHome = filepath.Join(home, ".local", "share")
-			}
-		}
-		store.Settings.HistoryFile = filepath.Join(dataHome, "reazy", "history.jsonl")
 	}
 
 	return store, nil
@@ -95,6 +89,29 @@ func normalizeFeeds(feeds []string) []string {
 		}
 	}
 	return normalized
+}
+
+func defaultDataHome() string {
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome != "" {
+		return dataHome
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "."
+	}
+	return filepath.Join(home, ".local", "share")
+}
+
+func normalizeHistoryPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if strings.EqualFold(filepath.Ext(path), ".jsonl") {
+		return filepath.Join(filepath.Dir(path), "history.db")
+	}
+	return path
 }
 
 func yamlKongLoader(r io.Reader) (kong.Resolver, error) {

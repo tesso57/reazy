@@ -5,10 +5,12 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// MockArticleItem satisfies the ArticleItem interface
-type mockArticleItem struct {
+// testArticleItem satisfies the ArticleItem interface.
+type testArticleItem struct {
 	title      string
 	isRead     bool
 	bookmarked bool
@@ -17,36 +19,28 @@ type mockArticleItem struct {
 	section    bool
 }
 
-func (m mockArticleItem) Title() string       { return m.title }
-func (m mockArticleItem) Description() string { return "" }
-func (m mockArticleItem) FilterValue() string { return m.title }
-func (m mockArticleItem) IsRead() bool        { return m.isRead }
-func (m mockArticleItem) IsBookmarked() bool  { return m.bookmarked }
-func (m mockArticleItem) HasAISummary() bool  { return m.hasAI }
-func (m mockArticleItem) FeedTitle() string   { return m.feedTitle }
-func (m mockArticleItem) IsSectionHeader() bool {
+func (m testArticleItem) Title() string       { return m.title }
+func (m testArticleItem) Description() string { return "" }
+func (m testArticleItem) FilterValue() string { return m.title }
+func (m testArticleItem) IsRead() bool        { return m.isRead }
+func (m testArticleItem) IsBookmarked() bool  { return m.bookmarked }
+func (m testArticleItem) HasAISummary() bool  { return m.hasAI }
+func (m testArticleItem) FeedTitle() string   { return m.feedTitle }
+func (m testArticleItem) IsSectionHeader() bool {
 	return m.section
 }
 
 func TestNewArticleDelegate(t *testing.T) {
 	d := NewArticleDelegate()
-	if d == nil {
-		t.Error("NewArticleDelegate returned nil")
-	}
-	if d.Height() != 1 {
-		t.Errorf("Expected Height 1, got %d", d.Height())
-	}
-	if d.Spacing() != 0 {
-		t.Errorf("Expected Spacing 0, got %d", d.Spacing())
-	}
+	require.NotNil(t, d)
+	assert.Equal(t, 1, d.Height())
+	assert.Equal(t, 0, d.Spacing())
 }
 
 func TestArticleDelegate_Update(t *testing.T) {
 	d := NewArticleDelegate()
 	cmd := d.Update(nil, nil)
-	if cmd != nil {
-		t.Error("Update should return nil")
-	}
+	assert.Nil(t, cmd)
 }
 
 func TestArticleDelegate_Render(t *testing.T) {
@@ -68,14 +62,14 @@ func TestArticleDelegate_Render(t *testing.T) {
 	}{
 		{
 			name:     "Unread Item",
-			item:     mockArticleItem{title: "Unread Article", isRead: false},
+			item:     testArticleItem{title: "Unread Article", isRead: false},
 			index:    0,
 			mdlIndex: 1, // Not selected
 			contains: "Unread Article",
 		},
 		{
 			name:     "Read Item",
-			item:     mockArticleItem{title: "Read Article", isRead: true},
+			item:     testArticleItem{title: "Read Article", isRead: true},
 			index:    0,
 			mdlIndex: 1, // Not selected
 			contains: "Read Article",
@@ -85,35 +79,35 @@ func TestArticleDelegate_Render(t *testing.T) {
 		},
 		{
 			name:     "AI Item",
-			item:     mockArticleItem{title: "AI Article", hasAI: true},
+			item:     testArticleItem{title: "AI Article", hasAI: true},
 			index:    0,
 			mdlIndex: 1,
 			contains: "[AI] AI Article",
 		},
 		{
 			name:     "Numbered AI Item",
-			item:     mockArticleItem{title: "1. AI Article", hasAI: true},
+			item:     testArticleItem{title: "1. AI Article", hasAI: true},
 			index:    0,
 			mdlIndex: 1,
 			contains: "1. [AI] AI Article",
 		},
 		{
 			name:     "Numbered Bookmarked AI Item",
-			item:     mockArticleItem{title: "2. AI Article", bookmarked: true, hasAI: true},
+			item:     testArticleItem{title: "2. AI Article", bookmarked: true, hasAI: true},
 			index:    0,
 			mdlIndex: 1,
 			contains: "2. [AI] [B] AI Article",
 		},
 		{
 			name:     "Selected Item",
-			item:     mockArticleItem{title: "Selected Article", isRead: false},
+			item:     testArticleItem{title: "Selected Article", isRead: false},
 			index:    0,
 			mdlIndex: 0, // Selected
 			contains: "Selected Article",
 		},
 		{
 			name:     "Section Header",
-			item:     mockArticleItem{title: "== 2026-02-14 (3) ==", section: true, hasAI: true, bookmarked: true},
+			item:     testArticleItem{title: "== 2026-02-14 (3) ==", section: true, hasAI: true, bookmarked: true},
 			index:    0,
 			mdlIndex: 1,
 			contains: "== 2026-02-14 (3) ==",
@@ -141,17 +135,10 @@ func TestArticleDelegate_Render(t *testing.T) {
 			d.Render(buf, l, tc.index, tc.item)
 
 			if tc.contains == "" {
-				if buf.Len() > 0 {
-					t.Errorf("Expected empty output, got %q", buf.String())
-				}
+				assert.Zero(t, buf.Len())
 			} else {
-				if !bytes.Contains(buf.Bytes(), []byte(tc.contains)) {
-					t.Errorf("Expected output to contain %q, got %q", tc.contains, buf.String())
-				}
+				assert.Contains(t, buf.String(), tc.contains)
 			}
-
-			// If we wanted to test Faint, we'd check for ANSI codes, but lipgloss output varies by term env.
-			// We trust lipgloss works; just checking logic flow is enough for coverage.
 		})
 	}
 }

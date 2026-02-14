@@ -29,6 +29,7 @@ type HistoryItem struct {
 	AIUpdatedAt  time.Time `json:"ai_updated_at"`
 	DigestDate   string    `json:"digest_date,omitempty"`
 	RelatedGUIDs []string  `json:"related_guids,omitempty"`
+	BodyHydrated bool      `json:"-"`
 }
 
 // History holds cached items keyed by GUID.
@@ -53,16 +54,20 @@ func (h *History) Items() map[string]*HistoryItem {
 func (h *History) Snapshot() []*HistoryItem {
 	items := make([]*HistoryItem, 0, len(h.items))
 	for _, v := range h.items {
+		if v == nil {
+			continue
+		}
 		items = append(items, v)
 	}
 	return items
 }
 
 // MergeFeed merges a fetched feed into history.
-func (h *History) MergeFeed(feed *Feed, savedAt time.Time) {
+func (h *History) MergeFeed(feed *Feed, savedAt time.Time) []*HistoryItem {
 	if feed == nil {
-		return
+		return nil
 	}
+	changed := make([]*HistoryItem, 0, len(feed.Items))
 	for _, it := range feed.Items {
 		guid := it.GUID
 		if guid == "" {
@@ -71,35 +76,98 @@ func (h *History) MergeFeed(feed *Feed, savedAt time.Time) {
 		if guid == "" {
 			guid = it.Title
 		}
+		if strings.TrimSpace(guid) == "" {
+			continue
+		}
 
 		if existing, exists := h.items[guid]; exists {
-			if existing.FeedURL == "" {
-				existing.FeedURL = it.FeedURL
+			if existing == nil || existing.kind() == NewsDigestKind {
+				continue
+			}
+			if mergeFetchedArticle(existing, it, savedAt) {
+				changed = append(changed, existing)
 			}
 			continue
 		}
 
-		h.items[guid] = &HistoryItem{
-			GUID:        guid,
-			Kind:        ArticleKind,
-			Title:       it.Title,
-			Description: it.Description,
-			Content:     it.Content,
-			Link:        it.Link,
-			Published:   it.Published,
-			Date:        it.Date,
-			FeedTitle:   it.FeedTitle,
-			FeedURL:     it.FeedURL,
-			IsRead:      false,
-			SavedAt:     savedAt,
+		newItem := &HistoryItem{
+			GUID:         guid,
+			Kind:         ArticleKind,
+			Title:        it.Title,
+			Description:  it.Description,
+			Content:      it.Content,
+			Link:         it.Link,
+			Published:    it.Published,
+			Date:         it.Date,
+			FeedTitle:    it.FeedTitle,
+			FeedURL:      it.FeedURL,
+			IsRead:       false,
+			SavedAt:      savedAt,
+			BodyHydrated: true,
 		}
+		h.items[guid] = newItem
+		changed = append(changed, newItem)
 	}
+	return changed
+}
+
+func mergeFetchedArticle(existing *HistoryItem, fetched Item, savedAt time.Time) bool {
+	if existing == nil {
+		return false
+	}
+
+	changed := false
+	if existing.Kind == "" {
+		existing.Kind = ArticleKind
+		changed = true
+	}
+	if fetched.Title != "" && fetched.Title != existing.Title {
+		existing.Title = fetched.Title
+		changed = true
+	}
+	if fetched.Description != "" && fetched.Description != existing.Description {
+		existing.Description = fetched.Description
+		changed = true
+	}
+	if fetched.Content != existing.Content {
+		existing.Content = fetched.Content
+		changed = true
+	}
+	if fetched.Link != "" && fetched.Link != existing.Link {
+		existing.Link = fetched.Link
+		changed = true
+	}
+	if fetched.Published != "" && fetched.Published != existing.Published {
+		existing.Published = fetched.Published
+		changed = true
+	}
+	if !fetched.Date.IsZero() && !fetched.Date.Equal(existing.Date) {
+		existing.Date = fetched.Date
+		changed = true
+	}
+	if fetched.FeedTitle != "" && fetched.FeedTitle != existing.FeedTitle {
+		existing.FeedTitle = fetched.FeedTitle
+		changed = true
+	}
+	if fetched.FeedURL != "" && fetched.FeedURL != existing.FeedURL {
+		existing.FeedURL = fetched.FeedURL
+		changed = true
+	}
+	if !savedAt.IsZero() && !savedAt.Equal(existing.SavedAt) {
+		existing.SavedAt = savedAt
+		changed = true
+	}
+	if !existing.BodyHydrated {
+		existing.BodyHydrated = true
+		changed = true
+	}
+	return changed
 }
 
 // MarkRead marks an item as read. Returns true if it existed.
 func (h *History) MarkRead(guid string) bool {
 	item, ok := h.items[guid]
-	if !ok {
+	if !ok || item == nil {
 		return false
 	}
 	item.IsRead = true
@@ -115,7 +183,7 @@ func (h *History) Item(guid string) (*HistoryItem, bool) {
 // ToggleBookmark returns true if the item exists and the specific item's state was toggled.
 func (h *History) ToggleBookmark(guid string) bool {
 	item, ok := h.items[guid]
-	if !ok {
+	if !ok || item == nil {
 		return false
 	}
 	item.IsBookmarked = !item.IsBookmarked
@@ -125,7 +193,7 @@ func (h *History) ToggleBookmark(guid string) bool {
 // SetInsight sets AI-generated insight fields for an item.
 func (h *History) SetInsight(guid, summary string, tags []string, updatedAt time.Time) bool {
 	item, ok := h.items[guid]
-	if !ok {
+	if !ok || item == nil {
 		return false
 	}
 	item.AISummary = summary
@@ -134,11 +202,22 @@ func (h *History) SetInsight(guid, summary string, tags []string, updatedAt time
 	return true
 }
 
+// UpsertItem inserts or updates a history item by GUID.
+func (h *History) UpsertItem(item *HistoryItem) {
+	if h == nil || item == nil || strings.TrimSpace(item.GUID) == "" {
+		return
+	}
+	if item.kind() == NewsDigestKind {
+		item.BodyHydrated = true
+	}
+	h.items[item.GUID] = item
+}
+
 // BookmarkedItems returns all bookmarked items.
 func (h *History) BookmarkedItems() []*HistoryItem {
 	items := make([]*HistoryItem, 0)
 	for _, hItem := range h.items {
-		if hItem.IsBookmarked {
+		if hItem != nil && hItem.IsBookmarked {
 			items = append(items, hItem)
 		}
 	}
@@ -153,7 +232,7 @@ func (h *History) ItemsByFeed(feedURL string) []*HistoryItem {
 
 	items := make([]*HistoryItem, 0, len(h.items))
 	for _, hItem := range h.items {
-		if hItem.kind() == NewsDigestKind {
+		if hItem == nil || hItem.kind() == NewsDigestKind {
 			continue
 		}
 		if feedURL == AllFeedsURL || feedURL == NewsURL || hItem.FeedURL == feedURL {
@@ -219,6 +298,7 @@ func (h *History) ReplaceDigestItemsByDate(dateKey string, items []*HistoryItem)
 		}
 		item.Kind = NewsDigestKind
 		item.DigestDate = dateKey
+		item.BodyHydrated = true
 		h.items[item.GUID] = item
 	}
 }

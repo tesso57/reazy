@@ -14,9 +14,10 @@ Reazy (Read + Lazy) is a modern, terminal-based RSS/Atom reader built with Go an
 - **All Feeds**: View articles from all feeds in a unified timeline.
 - **Date Sections in Lists**: `All Feeds` / `Bookmarks` / each feed view are grouped by date.
 - **News Tab (AI Digest)**: Build daily AI digest topics from today's articles and keep digest history grouped by date.
+- **SQLite History Store**: Read state/bookmarks/AI metadata are persisted in SQLite for faster startup and updates.
 - **AI Summary View**: In the detail screen, AI summary and article body are clearly separated for easier reading.
 - **AI Insights (Optional)**: Generate article summaries and tags via Codex CLI.
-- **AI Status Footer**: AI generation status is shown in the footer in article/detail/topic views.
+- **Status Footer**: AI generation status and feed timeout/failure notices are shown in the footer.
 
 ## Installation
 
@@ -44,6 +45,7 @@ reazy
 In the feed sidebar, select `* News` to open AI digest history grouped by date.  
 Today's digest is generated from your registered feeds and cached for the day.  
 In normal feed views (`All Feeds` / `Bookmarks` / each feed), articles are grouped by date sections.
+If some feeds are slow, Reazy shows available results first and reports timeout count in the footer.
 
 ### Keybindings (Default)
 - **Navigation**:
@@ -63,6 +65,8 @@ In normal feed views (`All Feeds` / `Bookmarks` / each feed), articles are group
 
 ## Configuration
 Configuration is stored in `$XDG_CONFIG_HOME/reazy/config.yaml` (usually `~/.config/reazy/config.yaml`).
+`history_file` defaults to `~/.local/share/reazy/history.db`.
+If you still have a `.jsonl` path, Reazy automatically uses `history.db` in the same directory.
 
 Example:
 ```yaml
@@ -73,6 +77,7 @@ keymap:
   up: k
   down: j
   ...
+history_file: /Users/you/.local/share/reazy/history.db
 codex:
   enabled: false
   command: codex

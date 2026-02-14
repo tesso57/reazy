@@ -2,21 +2,47 @@
 package usecase
 
 import (
+	"strings"
 	"time"
 
 	"github.com/tesso57/reazy/internal/domain/reading"
 )
 
+// FeedFetchOptions controls multi-feed fetch behavior.
+type FeedFetchOptions struct {
+	PerFeedTimeout time.Duration
+	BatchTimeout   time.Duration
+}
+
+// FeedFetchReport represents aggregate results of multi-feed fetching.
+type FeedFetchReport struct {
+	Requested int
+	Succeeded int
+	Failed    int
+	TimedOut  int
+}
+
+var defaultFeedFetchOptions = FeedFetchOptions{
+	PerFeedTimeout: 8 * time.Second,
+	BatchTimeout:   12 * time.Second,
+}
+
 // FeedFetcher abstracts RSS fetching.
 type FeedFetcher interface {
 	Fetch(url string) (*reading.Feed, error)
-	FetchAll(urls []string) (*reading.Feed, error)
+	FetchAll(urls []string, opt FeedFetchOptions) (*reading.Feed, FeedFetchReport, error)
 }
 
 // HistoryRepository abstracts history persistence.
 type HistoryRepository interface {
-	Load() (map[string]*reading.HistoryItem, error)
-	Save(items []*reading.HistoryItem) error
+	LoadMetadata() (map[string]*reading.HistoryItem, error)
+	LoadByGUID(guid string) (*reading.HistoryItem, error)
+	Upsert(items []*reading.HistoryItem) error
+	SetRead(guid string, isRead bool) error
+	SetBookmark(guid string, isBookmarked bool) error
+	SetInsight(guid, summary string, tags []string, updatedAt time.Time) error
+	ReplaceDigestItemsByDate(dateKey string, items []*reading.HistoryItem) error
+	LoadTodayArticles(dateKey string, feeds []string, limit int, loc *time.Location) ([]*reading.HistoryItem, error)
 }
 
 // ReadingService coordinates feed fetching and history persistence.
@@ -36,19 +62,19 @@ func NewReadingService(fetcher FeedFetcher, historyRepo HistoryRepository, now f
 }
 
 // FetchFeed fetches a single feed or a virtual aggregated feed.
-func (s *ReadingService) FetchFeed(url string, all []string) (*reading.Feed, error) {
+func (s *ReadingService) FetchFeed(url string, all []string) (*reading.Feed, FeedFetchReport, error) {
 	if url == reading.AllFeedsURL {
-		return s.Fetcher.FetchAll(all)
+		return s.Fetcher.FetchAll(all, defaultFeedFetchOptions)
 	}
 	if url == reading.NewsURL {
-		feed, err := s.Fetcher.FetchAll(all)
+		feed, report, err := s.Fetcher.FetchAll(all, defaultFeedFetchOptions)
 		if feed != nil {
 			feed.URL = reading.NewsURL
 			if feed.Title == "" {
 				feed.Title = "News"
 			}
 		}
-		return feed, err
+		return feed, report, err
 	}
 	if url == reading.BookmarksURL {
 		// Bookmarks are local, no fetch needed. Return empty feed or nil.
@@ -56,42 +82,115 @@ func (s *ReadingService) FetchFeed(url string, all []string) (*reading.Feed, err
 			Title: "Bookmarks",
 			URL:   reading.BookmarksURL,
 			Items: []reading.Item{},
-		}), nil
+		}), FeedFetchReport{}, nil
 	}
-	return s.Fetcher.Fetch(url)
+	feed, err := s.Fetcher.Fetch(url)
+	report := FeedFetchReport{Requested: 1}
+	if err != nil {
+		report.Failed = 1
+	} else {
+		report.Succeeded = 1
+	}
+	return feed, report, err
 }
 
-// LoadHistory loads history from persistence.
-func (s *ReadingService) LoadHistory() (*reading.History, error) {
-	items, err := s.HistoryRepo.Load()
+// LoadHistoryMetadata loads history metadata from persistence.
+func (s *ReadingService) LoadHistoryMetadata() (*reading.History, error) {
+	if s.HistoryRepo == nil {
+		return reading.NewHistory(nil), nil
+	}
+	items, err := s.HistoryRepo.LoadMetadata()
 	return reading.NewHistory(items), err
 }
 
-// SaveHistory persists the current history snapshot.
-func (s *ReadingService) SaveHistory(history *reading.History) error {
+// LoadHistoryItem loads one fully-hydrated history item by GUID.
+func (s *ReadingService) LoadHistoryItem(guid string) (*reading.HistoryItem, error) {
+	if s.HistoryRepo == nil || strings.TrimSpace(guid) == "" {
+		return nil, nil
+	}
+	return s.HistoryRepo.LoadByGUID(guid)
+}
+
+// LoadTodayArticles loads today's source articles for digest generation.
+func (s *ReadingService) LoadTodayArticles(dateKey string, feeds []string, limit int, loc *time.Location) ([]*reading.HistoryItem, error) {
+	if s.HistoryRepo == nil {
+		return nil, nil
+	}
+	return s.HistoryRepo.LoadTodayArticles(dateKey, feeds, limit, loc)
+}
+
+// MergeHistory merges fetched feed items into history and persists updated items.
+func (s *ReadingService) MergeHistory(history *reading.History, feed *reading.Feed) error {
 	if history == nil {
 		return nil
 	}
-	return s.HistoryRepo.Save(history.Snapshot())
+	changed := history.MergeFeed(feed, s.now())
+	if len(changed) == 0 || s.HistoryRepo == nil {
+		return nil
+	}
+	return s.HistoryRepo.Upsert(changed)
 }
 
-// MergeHistory merges fetched feed items into history.
-func (s *ReadingService) MergeHistory(history *reading.History, feed *reading.Feed) {
-	if history == nil {
-		return
+// MarkRead marks an article as read and persists the change.
+func (s *ReadingService) MarkRead(history *reading.History, guid string) error {
+	if history == nil || strings.TrimSpace(guid) == "" {
+		return nil
 	}
-	history.MergeFeed(feed, s.now())
+	if !history.MarkRead(guid) {
+		return nil
+	}
+	if s.HistoryRepo == nil {
+		return nil
+	}
+	return s.HistoryRepo.SetRead(guid, true)
 }
 
 // ToggleBookmark toggles the bookmark status of an item and persists the change.
 func (s *ReadingService) ToggleBookmark(history *reading.History, guid string) error {
-	if history == nil {
+	if history == nil || strings.TrimSpace(guid) == "" {
 		return nil
 	}
 	if history.ToggleBookmark(guid) {
-		return s.SaveHistory(history)
+		if s.HistoryRepo == nil {
+			return nil
+		}
+		item, ok := history.Item(guid)
+		if !ok || item == nil {
+			return nil
+		}
+		return s.HistoryRepo.SetBookmark(guid, item.IsBookmarked)
 	}
 	return nil
+}
+
+// ApplyInsight applies AI-generated insight and persists only updated fields.
+func (s *ReadingService) ApplyInsight(history *reading.History, guid string, insight Insight) (time.Time, bool, error) {
+	updatedAt := s.now()
+	if history == nil || strings.TrimSpace(guid) == "" {
+		return updatedAt, false, nil
+	}
+	if !history.SetInsight(guid, insight.Summary, insight.Tags, updatedAt) {
+		return updatedAt, false, nil
+	}
+	if s.HistoryRepo == nil {
+		return updatedAt, true, nil
+	}
+	if err := s.HistoryRepo.SetInsight(guid, insight.Summary, insight.Tags, updatedAt); err != nil {
+		return updatedAt, true, err
+	}
+	return updatedAt, true, nil
+}
+
+// ReplaceDigestItemsByDate updates digest items in memory and persistence.
+func (s *ReadingService) ReplaceDigestItemsByDate(history *reading.History, dateKey string, items []*reading.HistoryItem) error {
+	if history == nil || strings.TrimSpace(dateKey) == "" {
+		return nil
+	}
+	history.ReplaceDigestItemsByDate(dateKey, items)
+	if s.HistoryRepo == nil {
+		return nil
+	}
+	return s.HistoryRepo.ReplaceDigestItemsByDate(dateKey, items)
 }
 
 func (s *ReadingService) now() time.Time {

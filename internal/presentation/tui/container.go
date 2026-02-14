@@ -165,7 +165,7 @@ func (m *Model) buildModalProps() modal.Props {
 
 func (m *Model) buildFooterProps() string {
 	helpText := m.state.Help.View(&m.state.Keys)
-	return state.FooterText(m.state.Session, m.state.Loading, m.state.AIStatus, helpText)
+	return state.FooterText(m.state.Session, m.state.Loading, m.state.AIStatus, m.state.StatusMessage, helpText)
 }
 
 func headerVisible(st *state.ModelState) bool {

@@ -8,23 +8,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/tesso57/reazy/internal/domain/reading"
 )
 
-type stubNewsDigestGenerator struct {
-	topics  []NewsDigestTopic
-	err     error
+type mockNewsDigestGenerator struct {
+	mock.Mock
 	calls   int
 	lastReq NewsDigestRequest
 }
 
-func (s *stubNewsDigestGenerator) Generate(_ context.Context, req NewsDigestRequest) ([]NewsDigestTopic, error) {
-	s.calls++
-	s.lastReq = req
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.topics, nil
+func (m *mockNewsDigestGenerator) Generate(ctx context.Context, req NewsDigestRequest) ([]NewsDigestTopic, error) {
+	m.calls++
+	m.lastReq = req
+	args := m.Called(ctx, req)
+	topics, _ := args.Get(0).([]NewsDigestTopic)
+	return topics, args.Error(1)
 }
 
 func TestNewsDigestService_BuildDaily_UsesCache(t *testing.T) {
@@ -37,7 +36,7 @@ func TestNewsDigestService_BuildDaily_UsesCache(t *testing.T) {
 			Title:      "Cached",
 		},
 	})
-	gen := &stubNewsDigestGenerator{}
+	gen := &mockNewsDigestGenerator{}
 	svc := NewNewsDigestService(gen, func() time.Time { return now }, nil)
 
 	got, err := svc.BuildDaily(context.Background(), history, []string{"feed1"}, false)
@@ -74,16 +73,16 @@ func TestNewsDigestService_BuildDaily_ForceRegenerates(t *testing.T) {
 			Date:      time.Date(2026, 2, 14, 8, 0, 0, 0, loc),
 		},
 	})
-	gen := &stubNewsDigestGenerator{
-		topics: []NewsDigestTopic{
-			{
-				Title:        "Topic",
-				Summary:      "Summary",
-				Tags:         []string{"go"},
-				ArticleGUIDs: []string{"a1"},
-			},
+	gen := &mockNewsDigestGenerator{}
+	gen.On("Generate", mock.Anything, mock.Anything).Return([]NewsDigestTopic{
+		{
+			Title:        "Topic",
+			Summary:      "Summary",
+			Tags:         []string{"go"},
+			ArticleGUIDs: []string{"a1"},
 		},
-	}
+	}, nil).Once()
+
 	svc := NewNewsDigestService(gen, func() time.Time { return now }, func() *time.Location { return loc })
 
 	got, err := svc.BuildDaily(context.Background(), history, []string{"feed1"}, true)
@@ -102,6 +101,7 @@ func TestNewsDigestService_BuildDaily_ForceRegenerates(t *testing.T) {
 	if got.Items[0].Kind != reading.NewsDigestKind {
 		t.Fatalf("kind = %q, want %q", got.Items[0].Kind, reading.NewsDigestKind)
 	}
+	gen.AssertExpectations(t)
 }
 
 func TestNewsDigestService_BuildDaily_LimitsAndFilters(t *testing.T) {
@@ -120,21 +120,20 @@ func TestNewsDigestService_BuildDaily_LimitsAndFilters(t *testing.T) {
 		}
 	}
 	history := reading.NewHistory(items)
-	gen := &stubNewsDigestGenerator{
-		topics: []NewsDigestTopic{
-			{
-				Title:        "T1",
-				Summary:      "S1",
-				Tags:         []string{"go", "go", "rss"},
-				ArticleGUIDs: []string{"a0", "unknown"},
-			},
-			{
-				Title:        " ",
-				Summary:      "skip",
-				ArticleGUIDs: []string{"a1"},
-			},
+	gen := &mockNewsDigestGenerator{}
+	gen.On("Generate", mock.Anything, mock.Anything).Return([]NewsDigestTopic{
+		{
+			Title:        "T1",
+			Summary:      "S1",
+			Tags:         []string{"go", "go", "rss"},
+			ArticleGUIDs: []string{"a0", "unknown"},
 		},
-	}
+		{
+			Title:        " ",
+			Summary:      "skip",
+			ArticleGUIDs: []string{"a1"},
+		},
+	}, nil).Once()
 	svc := NewNewsDigestService(gen, func() time.Time { return now }, func() *time.Location { return loc })
 
 	got, err := svc.BuildDaily(context.Background(), history, []string{"feed1"}, true)
@@ -153,6 +152,7 @@ func TestNewsDigestService_BuildDaily_LimitsAndFilters(t *testing.T) {
 	if len(got.Items[0].AITags) != 2 {
 		t.Fatalf("tags should be normalized, got %#v", got.Items[0].AITags)
 	}
+	gen.AssertExpectations(t)
 }
 
 func TestNewsDigestService_BuildDaily_Errors(t *testing.T) {
@@ -167,9 +167,8 @@ func TestNewsDigestService_BuildDaily_Errors(t *testing.T) {
 }
 
 func TestPromptNewsDigestGenerator_Generate(t *testing.T) {
-	client := &stubTextGenerator{
-		output: `{"topics":[{"title":"Top","summary":"要約","tags":["go","rss"],"article_guids":["a1","a2"]}]}`,
-	}
+	client := &mockTextGenerator{}
+	client.On("Generate", mock.Anything, mock.AnythingOfType("string")).Return(`{"topics":[{"title":"Top","summary":"要約","tags":["go","rss"],"article_guids":["a1","a2"]}]}`, nil).Once()
 	gen := NewPromptNewsDigestGenerator(client)
 
 	topics, err := gen.Generate(context.Background(), NewsDigestRequest{
@@ -187,15 +186,20 @@ func TestPromptNewsDigestGenerator_Generate(t *testing.T) {
 	if topics[0].Title != "Top" {
 		t.Fatalf("title = %q, want Top", topics[0].Title)
 	}
-	if !strings.Contains(client.prompt, "article_guids") {
-		t.Fatalf("prompt should mention article_guids, got: %q", client.prompt)
+	calls := client.Calls
+	if len(calls) != 1 {
+		t.Fatalf("expected one Generate call, got %d", len(calls))
 	}
+	prompt, _ := calls[0].Arguments.Get(1).(string)
+	if !strings.Contains(prompt, "article_guids") {
+		t.Fatalf("prompt should mention article_guids, got: %q", prompt)
+	}
+	client.AssertExpectations(t)
 }
 
 func TestPromptNewsDigestGenerator_ParseWithNoise(t *testing.T) {
-	client := &stubTextGenerator{
-		output: "warn\n{\"topics\":[{\"title\":\"Top\",\"summary\":\"要約\",\"tags\":[\"go\"],\"article_guids\":[\"a1\"]}]}\n",
-	}
+	client := &mockTextGenerator{}
+	client.On("Generate", mock.Anything, mock.AnythingOfType("string")).Return("warn\n{\"topics\":[{\"title\":\"Top\",\"summary\":\"要約\",\"tags\":[\"go\"],\"article_guids\":[\"a1\"]}]}\n", nil).Once()
 	gen := NewPromptNewsDigestGenerator(client)
 
 	topics, err := gen.Generate(context.Background(), NewsDigestRequest{DateKey: "2026-02-14"})
@@ -205,46 +209,42 @@ func TestPromptNewsDigestGenerator_ParseWithNoise(t *testing.T) {
 	if len(topics) != 1 || topics[0].Title != "Top" {
 		t.Fatalf("unexpected topics: %#v", topics)
 	}
+	client.AssertExpectations(t)
 }
 
 func TestPromptNewsDigestGenerator_GenerateErrors(t *testing.T) {
 	tests := []struct {
 		name     string
-		client   *stubTextGenerator
 		noClient bool
+		output   string
+		err      error
 		wantErr  bool
 	}{
-		{
-			name:     "no client",
-			noClient: true,
-			wantErr:  true,
-		},
-		{
-			name: "client error",
-			client: &stubTextGenerator{
-				err: errors.New("provider error"),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid json",
-			client: &stubTextGenerator{
-				output: "not json",
-			},
-			wantErr: true,
-		},
+		{name: "no client", noClient: true, wantErr: true},
+		{name: "client error", err: errors.New("provider error"), wantErr: true},
+		{name: "invalid json", output: "not json", wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			generator := NewPromptNewsDigestGenerator(TextGenerator(tt.client))
 			if tt.noClient {
-				generator = NewPromptNewsDigestGenerator(nil)
+				generator := NewPromptNewsDigestGenerator(nil)
+				_, err := generator.Generate(context.Background(), NewsDigestRequest{DateKey: "2026-02-14"})
+				if (err != nil) != tt.wantErr {
+					t.Fatalf("Generate() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				return
 			}
+
+			client := &mockTextGenerator{}
+			client.On("Generate", mock.Anything, mock.AnythingOfType("string")).Return(tt.output, tt.err).Once()
+			generator := NewPromptNewsDigestGenerator(client)
+
 			_, err := generator.Generate(context.Background(), NewsDigestRequest{DateKey: "2026-02-14"})
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Generate() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			client.AssertExpectations(t)
 		})
 	}
 }

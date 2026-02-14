@@ -87,6 +87,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		update.HandleNewsDigestGeneratedMsg(m.state, msg, m.deps())
 	case update.InsightGeneratedMsg:
 		update.HandleInsightGeneratedMsg(m.state, msg, m.deps())
+	case update.ArticleDetailLoadedMsg:
+		cmds = append(cmds, update.HandleArticleDetailLoadedMsg(m.state, msg, m.deps()))
 	}
 
 	if m.state.Loading {
@@ -212,7 +214,7 @@ func newViewport() viewport.Model {
 }
 
 func loadHistory(readingSvc *usecase.ReadingService) *reading.History {
-	hist, _ := readingSvc.LoadHistory()
+	hist, _ := readingSvc.LoadHistoryMetadata()
 	if hist == nil {
 		hist = reading.NewHistory(nil)
 	}

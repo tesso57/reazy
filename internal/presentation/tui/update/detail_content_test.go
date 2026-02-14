@@ -75,8 +75,18 @@ func TestBuildDetailContent(t *testing.T) {
 		if !strings.Contains(got, "(No AI summary available.)") {
 			t.Error("expected fallback summary text")
 		}
+		if !strings.Contains(got, "(Loading article body...)") {
+			t.Error("expected loading body text")
+		}
+	})
+
+	t.Run("hydrated empty body uses browser fallback", func(t *testing.T) {
+		got := buildDetailContent(&presenter.Item{
+			TitleText:    "Only Title",
+			BodyHydrated: true,
+		}, true)
 		if !strings.Contains(got, "(No article body available. Open it in the browser.)") {
-			t.Error("expected fallback body text")
+			t.Error("expected fallback body text for hydrated item")
 		}
 	})
 

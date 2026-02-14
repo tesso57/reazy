@@ -26,11 +26,13 @@ type ModelState struct {
 	CurrentFeed            *reading.Feed
 	Err                    error
 	AIStatus               string
+	StatusMessage          string
 	ShowAISummary          bool
 	Previous               Session
 	DetailParentSession    Session
 	History                *reading.History
 	Feeds                  []string
+	PendingInsightGUID     string
 	PendingJJExit          bool
 	ForceNewsDigestRefresh bool
 	NewsTopicDigestGUID    string

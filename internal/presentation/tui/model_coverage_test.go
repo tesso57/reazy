@@ -32,7 +32,7 @@ func TestHandleDetailViewKeys(t *testing.T) {
 		HistoryFile: t.TempDir() + "/history.jsonl",
 		KeyMap:      settings.KeyMapConfig{Right: "l", Left: "h", Open: "o"},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	// Setup Detail View State
 	m.state.Session = state.DetailView
@@ -84,7 +84,7 @@ func TestHandleFeedViewKeys_AddDelete(t *testing.T) {
 		Feeds:  []string{"http://example.com/1", "http://example.com/2"},
 		KeyMap: settings.KeyMapConfig{AddFeed: "a", DeleteFeed: "x"},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 	m.state.Session = state.FeedView
 
 	// Test 1: Add Feed
@@ -171,7 +171,7 @@ func TestHandleArticleViewKeys_MarkRead(t *testing.T) {
 		HistoryFile: histPath,
 		KeyMap:      settings.KeyMapConfig{Right: "l"},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, hm, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, hm, &stubFeedFetcher{})
 
 	guid := "test-guid"
 	m.state.History.Items()[guid] = &reading.HistoryItem{GUID: guid, IsRead: false}
@@ -212,7 +212,7 @@ func TestHandleArticleViewKeys_OpenSectionHeaderDoesNothing(t *testing.T) {
 		Feeds:  []string{"http://example.com"},
 		KeyMap: settings.KeyMapConfig{Right: "l", Bookmark: "b", Summarize: "s"},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
 
 	m.state.Session = state.ArticleView
 	m.state.ArticleList.SetItems([]list.Item{
@@ -252,7 +252,7 @@ func TestHandleArticleViewKeys_OpenSectionHeaderDoesNothing(t *testing.T) {
 
 func TestUpdateAddingFeedView_Esc(t *testing.T) {
 	cfg := settings.Settings{}
-	m := newTestModel(cfg, &stubSubscriptionRepo{}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{}, &stubHistoryRepo{}, &stubFeedFetcher{})
 	m.state.Session = state.AddingFeedView
 
 	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -266,7 +266,7 @@ func TestHandleArticleViewKeys_Refresh(t *testing.T) {
 	cfg := settings.Settings{
 		KeyMap: settings.KeyMapConfig{Refresh: "r"},
 	}
-	m := newTestModel(cfg, &stubSubscriptionRepo{}, &stubHistoryRepo{}, stubFeedFetcher{})
+	m := newTestModel(cfg, &stubSubscriptionRepo{}, &stubHistoryRepo{}, &stubFeedFetcher{})
 	m.state.Session = state.ArticleView
 	m.state.CurrentFeed = &reading.Feed{URL: "http://example.com"}
 
@@ -285,7 +285,7 @@ func TestHandleArticleViewKeys_Summarize(t *testing.T) {
 		Feeds:  []string{"http://example.com"},
 		KeyMap: settings.KeyMapConfig{Summarize: "s", ToggleSummary: "S"},
 	}
-	m := newTestModelWithInsightGenerator(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{}, stubInsightGenerator{
+	m := newTestModelWithInsightGenerator(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{}, &stubInsightGenerator{
 		insight: usecase.Insight{
 			Summary: "AI generated summary",
 			Tags:    []string{"go", "rss"},
@@ -344,7 +344,7 @@ func TestHandleDetailViewKeys_Summarize(t *testing.T) {
 		Feeds:  []string{"http://example.com"},
 		KeyMap: settings.KeyMapConfig{Summarize: "s"},
 	}
-	m := newTestModelWithInsightGenerator(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, stubFeedFetcher{}, stubInsightGenerator{
+	m := newTestModelWithInsightGenerator(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{}, &stubInsightGenerator{
 		insight: usecase.Insight{
 			Summary: "Detail AI summary",
 			Tags:    []string{"tag1", "tag2"},

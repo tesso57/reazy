@@ -39,7 +39,7 @@ Domain層はビジネスルールと中核モデルを保持し、外部依存�
 #### Infrastructure
 Infrastructure層は外部I/Oや永続化の実装を提供し、Application/Domainから参照される。
 - `internal/infrastructure/feed/`: RSS取得・パース（gofeed）。
-- `internal/infrastructure/history/`: 履歴の永続化（JSONL）。
+- `internal/infrastructure/history/`: 履歴の永続化（SQLite）。
 - `internal/infrastructure/config/`: 設定の読み書き（kong + yaml）。
 - `internal/infrastructure/ai/`: AIプロバイダ連携の抽象化と実装（例: Codex CLI）。
 
@@ -133,14 +133,14 @@ UIに表示             Reducer (State update)
 - 記事を開く
   - Intent: OpenArticle
   - State: detailView
-  - Command: MarkRead + SaveHistory
+  - Command: MarkRead（差分更新）
   - State更新 → 記事一覧再構築 → Render
 - AI要約/タグ生成
   - Intent: Summarize
   - State: loading=true
   - Command: GenerateInsight(AI client abstraction -> Codex subprocess)
   - Msg: InsightGenerated
-  - State更新（History + 記事表示）→ SaveHistory → Render
+  - State更新（History + 記事表示）→ 差分更新永続化 → Render
 - Newsタブ表示
   - Intent: OpenFeed(`internal://news`)
   - Command: FetchFeed(registered feedsを集約) -> GenerateDailyNewsDigest(当日記事をAIトピック化)
@@ -152,7 +152,7 @@ UIに表示             Reducer (State update)
 
 1. ドメインの抽出
    - `internal/feed`, `internal/history` から純粋なモデルを切り出し `internal/domain` に配置する。
-   - 外部依存(gofeed/JSONL)に触れる処理は残さない。
+   - 外部依存(gofeed/SQLite)に触れる処理は残さない。
 
 2. アプリケーション層の導入
    - UIから呼ばれている処理をユースケース単位で `internal/application/usecase` に移す。

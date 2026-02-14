@@ -42,7 +42,11 @@ func buildDetailContentForWidth(i *presenter.Item, showAISummary bool, width int
 		summary = "(No AI summary available.)"
 	}
 	if body == "" {
-		body = "(No article body available. Open it in the browser.)"
+		if !i.BodyHydrated {
+			body = "(Loading article body...)"
+		} else {
+			body = "(No article body available. Open it in the browser.)"
+		}
 	}
 	summary = wrapDetailText(summary, width)
 	body = wrapDetailText(body, width)

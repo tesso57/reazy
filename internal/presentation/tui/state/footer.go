@@ -3,13 +3,18 @@ package state
 import "strings"
 
 // FooterText returns the footer content for the current session.
-func FooterText(session Session, loading bool, aiStatus, helpText string) string {
-	status := strings.TrimSpace(aiStatus)
-	if !loading && status != "" && (session == ArticleView || session == NewsTopicView || session == DetailView) {
-		if helpText == "" {
-			return status
+func FooterText(session Session, loading bool, aiStatus, statusMessage, helpText string) string {
+	lines := make([]string, 0, 3)
+	if !loading {
+		if msg := strings.TrimSpace(statusMessage); msg != "" {
+			lines = append(lines, msg)
 		}
-		return status + "\n" + helpText
+		if ai := strings.TrimSpace(aiStatus); ai != "" && (session == ArticleView || session == NewsTopicView || session == DetailView) {
+			lines = append(lines, ai)
+		}
 	}
-	return helpText
+	if h := strings.TrimSpace(helpText); h != "" {
+		lines = append(lines, h)
+	}
+	return strings.Join(lines, "\n")
 }

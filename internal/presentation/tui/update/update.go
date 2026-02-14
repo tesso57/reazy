@@ -28,9 +28,10 @@ type Deps struct {
 
 // FeedFetchedMsg is emitted after fetching feeds.
 type FeedFetchedMsg struct {
-	Feed *reading.Feed
-	Err  error
-	URL  string
+	Feed   *reading.Feed
+	Report usecase.FeedFetchReport
+	Err    error
+	URL    string
 }
 
 // InsightGeneratedMsg is emitted after generating AI insight for an article.
@@ -38,6 +39,14 @@ type InsightGeneratedMsg struct {
 	GUID    string
 	Insight usecase.Insight
 	Err     error
+}
+
+// ArticleDetailLoadedMsg is emitted after loading one hydrated history item.
+type ArticleDetailLoadedMsg struct {
+	GUID   string
+	Item   *reading.HistoryItem
+	Err    error
+	Silent bool
 }
 
 // NewsDigestGeneratedMsg is emitted after generating daily news digest topics.
@@ -54,8 +63,8 @@ func FetchFeedCmd(readingSvc *usecase.ReadingService, url string, feeds []string
 	allFeeds := append([]string(nil), feeds...)
 	trimmed := strings.TrimSpace(url)
 	return func() tea.Msg {
-		f, err := readingSvc.FetchFeed(trimmed, allFeeds)
-		return FeedFetchedMsg{Feed: f, Err: err, URL: trimmed}
+		f, report, err := readingSvc.FetchFeed(trimmed, allFeeds)
+		return FeedFetchedMsg{Feed: f, Report: report, Err: err, URL: trimmed}
 	}
 }
 
@@ -72,7 +81,7 @@ func GenerateInsightCmd(insightSvc *usecase.InsightService, guid string, req use
 }
 
 // GenerateDailyNewsDigestCmd creates a command to build today's digest topics.
-func GenerateDailyNewsDigestCmd(newsSvc *usecase.NewsDigestService, history *reading.History, feeds []string, force bool) tea.Cmd {
+func GenerateDailyNewsDigestCmd(newsSvc *usecase.NewsDigestService, readingSvc *usecase.ReadingService, history *reading.History, feeds []string, force bool) tea.Cmd {
 	historySnapshot := cloneHistoryForDigest(history)
 	feedSnapshot := append([]string(nil), feeds...)
 	return func() tea.Msg {
@@ -82,6 +91,24 @@ func GenerateDailyNewsDigestCmd(newsSvc *usecase.NewsDigestService, history *rea
 				Err:   fmt.Errorf("codex integration is disabled"),
 			}
 		}
+		if readingSvc == nil {
+			return NewsDigestGeneratedMsg{
+				Force: force,
+				Err:   fmt.Errorf("reading service is not configured"),
+			}
+		}
+		dateKey := newsSvc.TodayDateKey()
+		todayArticles, err := readingSvc.LoadTodayArticles(dateKey, feedSnapshot, 60, time.Local)
+		if err != nil {
+			return NewsDigestGeneratedMsg{
+				DateKey: dateKey,
+				Force:   force,
+				Err:     err,
+			}
+		}
+		for _, article := range todayArticles {
+			historySnapshot.UpsertItem(article)
+		}
 		digest, err := newsSvc.BuildDaily(context.Background(), historySnapshot, feedSnapshot, force)
 		return NewsDigestGeneratedMsg{
 			DateKey:   digest.DateKey,
@@ -89,6 +116,20 @@ func GenerateDailyNewsDigestCmd(newsSvc *usecase.NewsDigestService, history *rea
 			UsedCache: digest.UsedCache,
 			Force:     force,
 			Err:       err,
+		}
+	}
+}
+
+// LoadArticleDetailCmd loads one article body from persistence.
+func LoadArticleDetailCmd(readingSvc *usecase.ReadingService, guid string, silent bool) tea.Cmd {
+	guid = strings.TrimSpace(guid)
+	return func() tea.Msg {
+		item, err := readingSvc.LoadHistoryItem(guid)
+		return ArticleDetailLoadedMsg{
+			GUID:   guid,
+			Item:   item,
+			Err:    err,
+			Silent: silent,
 		}
 	}
 }
@@ -190,8 +231,10 @@ func HandleWindowSize(s *state.ModelState, msg tea.WindowSizeMsg) {
 func HandleFeedFetchedMsg(s *state.ModelState, msg FeedFetchedMsg, deps Deps) tea.Cmd {
 	if msg.Err == nil {
 		s.Loading = false
-		deps.Reading.MergeHistory(s.History, msg.Feed)
-		go func() { _ = deps.Reading.SaveHistory(s.History) }()
+		if err := deps.Reading.MergeHistory(s.History, msg.Feed); err != nil {
+			s.Err = err
+		}
+		s.StatusMessage = feedFetchStatusMessage(msg.Report)
 	}
 
 	currentURL := ""
@@ -217,7 +260,7 @@ func HandleFeedFetchedMsg(s *state.ModelState, msg FeedFetchedMsg, deps Deps) te
 			s.AIStatus = "AI: generating daily news..."
 			return tea.Batch(
 				s.Spinner.Tick,
-				GenerateDailyNewsDigestCmd(deps.NewsDigests, s.History, s.Feeds, force),
+				GenerateDailyNewsDigestCmd(deps.NewsDigests, deps.Reading, s.History, s.Feeds, force),
 			)
 		}
 	}
@@ -240,8 +283,9 @@ func HandleNewsDigestGeneratedMsg(s *state.ModelState, msg NewsDigestGeneratedMs
 
 	s.Err = nil
 	if !msg.UsedCache {
-		s.History.ReplaceDigestItemsByDate(msg.DateKey, msg.Items)
-		go func() { _ = deps.Reading.SaveHistory(s.History) }()
+		if err := deps.Reading.ReplaceDigestItemsByDate(s.History, msg.DateKey, msg.Items); err != nil {
+			s.Err = err
+		}
 		s.AIStatus = fmt.Sprintf("AI: daily news updated %s", time.Now().Format("2006-01-02 15:04"))
 	} else {
 		s.AIStatus = fmt.Sprintf("AI: using daily news cache (%s)", msg.DateKey)
@@ -261,16 +305,14 @@ func HandleInsightGeneratedMsg(s *state.ModelState, msg InsightGeneratedMsg, dep
 		return
 	}
 
-	if !deps.Insights.ApplyToHistory(s.History, msg.GUID, msg.Insight) {
-		s.AIStatus = "AI: failed to attach generated insight"
+	updatedAt, ok, err := deps.Reading.ApplyInsight(s.History, msg.GUID, msg.Insight)
+	if err != nil {
+		s.AIStatus = fmt.Sprintf("AI: save failed (%s)", strings.TrimSpace(err.Error()))
 		return
 	}
-
-	go func() { _ = deps.Reading.SaveHistory(s.History) }()
-
-	updatedAt := time.Now()
-	if item, ok := s.History.Item(msg.GUID); ok && !item.AIUpdatedAt.IsZero() {
-		updatedAt = item.AIUpdatedAt
+	if !ok {
+		s.AIStatus = "AI: failed to attach generated insight"
+		return
 	}
 	s.AIStatus = fmt.Sprintf("AI: updated %s", updatedAt.Format("2006-01-02 15:04"))
 
@@ -288,6 +330,44 @@ func HandleInsightGeneratedMsg(s *state.ModelState, msg InsightGeneratedMsg, dep
 		}
 		break
 	}
+}
+
+// HandleArticleDetailLoadedMsg applies hydrated article payload to state.
+func HandleArticleDetailLoadedMsg(s *state.ModelState, msg ArticleDetailLoadedMsg, deps Deps) tea.Cmd {
+	if msg.Err != nil {
+		s.Loading = false
+		if !msg.Silent {
+			s.Err = msg.Err
+		}
+		s.PendingInsightGUID = ""
+		return nil
+	}
+	if msg.Item != nil {
+		msg.Item.BodyHydrated = true
+		s.History.UpsertItem(msg.Item)
+		applyHydratedItemToList(&s.ArticleList, msg.Item)
+
+		if s.Session == state.DetailView {
+			if selected, ok := selectedActionableArticleItem(s); ok && selected.GUID == msg.Item.GUID {
+				refreshDetailViewport(s, selected)
+			}
+		}
+	}
+
+	if s.PendingInsightGUID != "" && s.PendingInsightGUID == msg.GUID {
+		s.PendingInsightGUID = ""
+		s.Loading = true
+		s.AIStatus = "AI: generating summary and tags..."
+		if selected, ok := selectedActionableArticleItem(s); ok && selected.GUID == msg.GUID {
+			return tea.Batch(
+				s.Spinner.Tick,
+				GenerateInsightCmd(deps.Insights, selected.GUID, buildInsightRequest(selected)),
+			)
+		}
+	}
+
+	s.Loading = false
+	return nil
 }
 
 func handleAddingFeedView(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.Cmd, bool) {
@@ -395,9 +475,7 @@ func handleArticleViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (
 				enterNewsTopicView(s, i)
 				return nil, true
 			}
-			if s.History.MarkRead(i.GUID) {
-				go func() { _ = deps.Reading.SaveHistory(s.History) }()
-
+			if err := deps.Reading.MarkRead(s.History, i.GUID); err == nil {
 				idx := s.ArticleList.Index()
 				i.Read = true
 				s.ArticleList.SetItem(idx, i)
@@ -405,6 +483,15 @@ func handleArticleViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (
 
 			s.DetailParentSession = state.ArticleView
 			s.Session = state.DetailView
+			if !i.BodyHydrated {
+				i.Content = ""
+				refreshDetailViewport(s, i)
+				s.Loading = true
+				return tea.Batch(
+					s.Spinner.Tick,
+					LoadArticleDetailCmd(deps.Reading, i.GUID, true),
+				), true
+			}
 			refreshDetailViewport(s, i)
 		}
 		return nil, true
@@ -446,14 +533,22 @@ func handleNewsTopicViewIntent(s *state.ModelState, in intent.Intent, deps Deps)
 		return nil, true
 	case intent.Open:
 		if i, ok := selectedActionableArticleItem(s); ok {
-			if s.History.MarkRead(i.GUID) {
-				go func() { _ = deps.Reading.SaveHistory(s.History) }()
+			if err := deps.Reading.MarkRead(s.History, i.GUID); err == nil {
 				idx := s.ArticleList.Index()
 				i.Read = true
 				s.ArticleList.SetItem(idx, i)
 			}
 			s.DetailParentSession = state.NewsTopicView
 			s.Session = state.DetailView
+			if !i.BodyHydrated {
+				i.Content = ""
+				refreshDetailViewport(s, i)
+				s.Loading = true
+				return tea.Batch(
+					s.Spinner.Tick,
+					LoadArticleDetailCmd(deps.Reading, i.GUID, true),
+				), true
+			}
 			refreshDetailViewport(s, i)
 		}
 		return nil, true
@@ -550,14 +645,70 @@ func startInsightGenerationForSelection(s *state.ModelState, deps Deps) tea.Cmd 
 		return nil
 	}
 
+	if !item.BodyHydrated {
+		s.Loading = true
+		s.Err = nil
+		s.PendingInsightGUID = item.GUID
+		s.AIStatus = "AI: loading article content..."
+		return tea.Batch(
+			s.Spinner.Tick,
+			LoadArticleDetailCmd(deps.Reading, item.GUID, false),
+		)
+	}
+
 	s.Loading = true
 	s.Err = nil
+	s.PendingInsightGUID = ""
 	s.AIStatus = "AI: generating summary and tags..."
 
 	return tea.Batch(
 		s.Spinner.Tick,
 		GenerateInsightCmd(deps.Insights, item.GUID, buildInsightRequest(item)),
 	)
+}
+
+func feedFetchStatusMessage(report usecase.FeedFetchReport) string {
+	if report.Requested <= 1 {
+		return ""
+	}
+	if report.TimedOut > 0 {
+		if report.TimedOut == 1 {
+			return "1 feed timed out"
+		}
+		return fmt.Sprintf("%d feeds timed out", report.TimedOut)
+	}
+	if report.Failed > 0 {
+		if report.Failed == 1 {
+			return "1 feed failed to load"
+		}
+		return fmt.Sprintf("%d feeds failed to load", report.Failed)
+	}
+	return ""
+}
+
+func applyHydratedItemToList(model *list.Model, item *reading.HistoryItem) {
+	if model == nil || item == nil {
+		return
+	}
+	for idx, listItem := range model.Items() {
+		current, ok := listItem.(*presenter.Item)
+		if !ok || current == nil || current.GUID != item.GUID {
+			continue
+		}
+		current.RawTitle = item.Title
+		current.Desc = item.Description
+		current.Content = item.Content
+		current.Published = item.Published
+		current.Link = item.Link
+		current.AISummary = item.AISummary
+		current.AITags = append([]string(nil), item.AITags...)
+		current.AIUpdatedAt = item.AIUpdatedAt
+		current.Bookmarked = item.IsBookmarked
+		current.Read = item.IsRead
+		current.BodyHydrated = true
+		model.SetItem(idx, current)
+		return
+	}
 }
 
 func selectedFeedItem(s *state.ModelState) (*presenter.Item, bool) {

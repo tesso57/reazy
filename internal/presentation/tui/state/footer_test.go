@@ -4,12 +4,13 @@ import "testing"
 
 func TestFooterText(t *testing.T) {
 	tests := []struct {
-		name     string
-		session  Session
-		loading  bool
-		aiStatus string
-		helpText string
-		want     string
+		name          string
+		session       Session
+		loading       bool
+		aiStatus      string
+		statusMessage string
+		helpText      string
+		want          string
 	}{
 		{
 			name:     "help only when no ai status",
@@ -23,6 +24,13 @@ func TestFooterText(t *testing.T) {
 			aiStatus: "AI: updated",
 			helpText: "help",
 			want:     "help",
+		},
+		{
+			name:          "generic status shown in feed view",
+			session:       FeedView,
+			statusMessage: "2 feeds timed out",
+			helpText:      "help",
+			want:          "2 feeds timed out\nhelp",
 		},
 		{
 			name:     "help only while loading",
@@ -57,7 +65,7 @@ func TestFooterText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FooterText(tt.session, tt.loading, tt.aiStatus, tt.helpText)
+			got := FooterText(tt.session, tt.loading, tt.aiStatus, tt.statusMessage, tt.helpText)
 			if got != tt.want {
 				t.Fatalf("FooterText() = %q, want %q", got, tt.want)
 			}
