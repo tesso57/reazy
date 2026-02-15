@@ -143,11 +143,6 @@ func (s *stubHistoryRepo) ReplaceDigestItemsByDate(dateKey string, items []*read
 	if s.items == nil {
 		s.items = make(map[string]*reading.HistoryItem)
 	}
-	for guid, item := range s.items {
-		if item != nil && item.Kind == reading.NewsDigestKind && item.DigestDate == dateKey {
-			delete(s.items, guid)
-		}
-	}
 	for _, item := range items {
 		if item == nil || item.GUID == "" {
 			continue

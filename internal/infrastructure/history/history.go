@@ -309,7 +309,8 @@ func (m *Manager) SetInsight(guid, summary string, tags []string, updatedAt time
 	return err
 }
 
-// ReplaceDigestItemsByDate replaces all digest rows for the specified date.
+// ReplaceDigestItemsByDate upserts digest rows for the specified date while
+// keeping previously generated rows for the same date.
 func (m *Manager) ReplaceDigestItemsByDate(dateKey string, items []*reading.HistoryItem) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -328,14 +329,6 @@ func (m *Manager) ReplaceDigestItemsByDate(dateKey string, items []*reading.Hist
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-
-	if _, err := tx.Exec(
-		"DELETE FROM history_items WHERE kind = ? AND digest_date = ?",
-		reading.NewsDigestKind,
-		dateKey,
-	); err != nil {
-		return err
-	}
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO history_items (

@@ -178,6 +178,39 @@ func TestBuildArticleListItems_NewsShowsDigestHistoryByDate(t *testing.T) {
 	}
 }
 
+func TestBuildArticleListItems_NewsSameDateShowsLatestFirst(t *testing.T) {
+	today := time.Now().In(time.Local).Format("2006-01-02")
+	now := time.Now().In(time.Local)
+	history := reading.NewHistory(map[string]*reading.HistoryItem{
+		"d_old": {
+			GUID:       "d_old",
+			Kind:       reading.NewsDigestKind,
+			DigestDate: today,
+			Title:      "Old Topic",
+			Date:       now.Add(-time.Minute),
+			FeedURL:    reading.NewsURL,
+		},
+		"d_new": {
+			GUID:       "d_new",
+			Kind:       reading.NewsDigestKind,
+			DigestDate: today,
+			Title:      "New Topic",
+			Date:       now,
+			FeedURL:    reading.NewsURL,
+		},
+	})
+
+	items := BuildArticleListItems(history, reading.NewsURL)
+	if len(items) != 3 {
+		t.Fatalf("len(items) = %d, want 3", len(items))
+	}
+	firstDigest := items[1].(*Item)
+	secondDigest := items[2].(*Item)
+	if firstDigest.GUID != "d_new" || secondDigest.GUID != "d_old" {
+		t.Fatalf("unexpected order: %q then %q", firstDigest.GUID, secondDigest.GUID)
+	}
+}
+
 func TestApplyArticleList_SelectsFirstNewsDigest(t *testing.T) {
 	today := time.Now().In(time.Local).Format("2006-01-02")
 	history := reading.NewHistory(map[string]*reading.HistoryItem{

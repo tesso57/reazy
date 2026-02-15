@@ -13,7 +13,7 @@ Reazy (Read + Lazy) is a modern, terminal-based RSS/Atom reader built with Go an
 - **Read Status**: Tracks read articles and dims them.
 - **All Feeds**: View articles from all feeds in a unified timeline.
 - **Date Sections in Lists**: `All Feeds` / `Bookmarks` / each feed view are grouped by date.
-- **News Tab (AI Digest)**: Build daily AI digest topics from today's articles and keep digest history grouped by date.
+- **News Tab (AI Digest)**: Build daily AI digest topics from today's articles and keep digest history grouped by date. Refreshing News appends new topics without deleting older ones from the same day.
 - **SQLite History Store**: Read state/bookmarks/AI metadata are persisted in SQLite for faster startup and updates.
 - **AI Summary View**: In the detail screen, AI summary and article body are clearly separated for easier reading.
 - **AI Insights (Optional)**: Generate article summaries and tags via Codex CLI.
@@ -44,6 +44,7 @@ reazy
 
 In the feed sidebar, select `* News` to open AI digest history grouped by date.  
 Today's digest is generated from your registered feeds and cached for the day.  
+Manual refresh in `News` regenerates today's digest and keeps previous topics for that date.  
 In normal feed views (`All Feeds` / `Bookmarks` / each feed), articles are grouped by date sections.
 If some feeds are slow, Reazy shows available results first and reports timeout count in the footer.
 
@@ -56,7 +57,7 @@ If some feeds are slow, Reazy shows available results first and reports timeout 
 - **Actions**:
   - `a`: Add Feed
   - `x`: Delete Feed
-  - `r`: Refresh current feed (`News` tab regenerates today's digest)
+  - `r`: Refresh current feed (`News` regenerates today's digest and keeps previous topics for the date)
   - `b`: Toggle Bookmark
   - `s`: Generate AI Summary/Tags (article/detail)
   - `S`: Toggle AI Summary visibility (detail view)

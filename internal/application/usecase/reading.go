@@ -181,7 +181,7 @@ func (s *ReadingService) ApplyInsight(history *reading.History, guid string, ins
 	return updatedAt, true, nil
 }
 
-// ReplaceDigestItemsByDate updates digest items in memory and persistence.
+// ReplaceDigestItemsByDate upserts digest items in memory and persistence.
 func (s *ReadingService) ReplaceDigestItemsByDate(history *reading.History, dateKey string, items []*reading.HistoryItem) error {
 	if history == nil || strings.TrimSpace(dateKey) == "" {
 		return nil

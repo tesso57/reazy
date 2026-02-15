@@ -104,6 +104,32 @@ func TestNewsDigestService_BuildDaily_ForceRegenerates(t *testing.T) {
 	gen.AssertExpectations(t)
 }
 
+func TestBuildDigestHistoryItems_UsesRunSpecificGUID(t *testing.T) {
+	loc := time.FixedZone("JST", 9*60*60)
+	topics := []NewsDigestTopic{
+		{Title: "Topic 1", Summary: "Summary 1"},
+		{Title: "Topic 2", Summary: "Summary 2"},
+	}
+	run1 := time.Date(2026, 2, 14, 9, 0, 0, 100, loc)
+	run2 := run1.Add(time.Minute)
+
+	items1 := buildDigestHistoryItems("2026-02-14", topics, run1, loc)
+	items2 := buildDigestHistoryItems("2026-02-14", topics, run2, loc)
+
+	if len(items1) != 2 || len(items2) != 2 {
+		t.Fatalf("unexpected item lengths: %d %d", len(items1), len(items2))
+	}
+	if items1[0].GUID == items2[0].GUID {
+		t.Fatalf("guid should be unique per run: %q", items1[0].GUID)
+	}
+	if !strings.HasPrefix(items1[0].GUID, reading.NewsDigestKind+":2026-02-14:") {
+		t.Fatalf("unexpected guid format: %q", items1[0].GUID)
+	}
+	if !items1[0].Date.After(items1[1].Date) {
+		t.Fatalf("topic order should be preserved by Date, got %v <= %v", items1[0].Date, items1[1].Date)
+	}
+}
+
 func TestNewsDigestService_BuildDaily_LimitsAndFilters(t *testing.T) {
 	loc := time.FixedZone("JST", 9*60*60)
 	now := time.Date(2026, 2, 14, 9, 0, 0, 0, loc)

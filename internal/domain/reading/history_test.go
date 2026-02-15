@@ -142,21 +142,30 @@ func TestHistory_DigestItemsAndReplace(t *testing.T) {
 	h.ReplaceDigestItemsByDate("2026-02-14", newDigest)
 
 	got := h.DigestItemsByDate("2026-02-14")
-	if len(got) != 2 {
-		t.Fatalf("DigestItemsByDate count = %d, want 2", len(got))
+	if len(got) != 4 {
+		t.Fatalf("DigestItemsByDate count = %d, want 4", len(got))
 	}
-	if got[0].GUID != "d_new_1" || got[1].GUID != "d_new_2" {
-		t.Fatalf("unexpected digests after replace: %#v", got)
+	found := make(map[string]bool, len(got))
+	for _, item := range got {
+		if item == nil {
+			continue
+		}
+		found[item.GUID] = true
+		if item.Kind != NewsDigestKind {
+			t.Fatalf("digest kind should be %q", NewsDigestKind)
+		}
 	}
-	if got[0].Kind != NewsDigestKind || got[1].Kind != NewsDigestKind {
-		t.Fatalf("digest kind should be %q", NewsDigestKind)
+	for _, guid := range []string{"d_old_1", "d_old_2", "d_new_1", "d_new_2"} {
+		if !found[guid] {
+			t.Fatalf("digest %q should exist after upsert", guid)
+		}
 	}
 
-	if _, ok := h.Item("d_old_1"); ok {
-		t.Fatal("old digest should be removed")
+	if _, ok := h.Item("d_old_1"); !ok {
+		t.Fatal("old digest should be kept")
 	}
-	if _, ok := h.Item("d_old_2"); ok {
-		t.Fatal("old digest should be removed")
+	if _, ok := h.Item("d_old_2"); !ok {
+		t.Fatal("old digest should be kept")
 	}
 	if _, ok := h.Item("d_keep"); !ok {
 		t.Fatal("digest from another date should be kept")

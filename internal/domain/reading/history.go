@@ -252,12 +252,24 @@ func (h *History) DigestItemsByDate(dateKey string) []*HistoryItem {
 		items = append(items, hItem)
 	}
 	sort.Slice(items, func(i, j int) bool {
+		leftDate := historySortDate(items[i], time.Local)
+		rightDate := historySortDate(items[j], time.Local)
+		if !leftDate.Equal(rightDate) {
+			if leftDate.IsZero() {
+				return false
+			}
+			if rightDate.IsZero() {
+				return true
+			}
+			return leftDate.After(rightDate)
+		}
 		return items[i].GUID < items[j].GUID
 	})
 	return items
 }
 
-// DigestItems returns all digest items sorted by date (desc) and GUID (asc).
+// DigestItems returns all digest items sorted by digest_date (desc),
+// then by article date (desc), then by GUID (asc).
 func (h *History) DigestItems() []*HistoryItem {
 	items := make([]*HistoryItem, 0)
 	for _, hItem := range h.items {
@@ -270,6 +282,17 @@ func (h *History) DigestItems() []*HistoryItem {
 		leftKey := digestDateKey(items[i], time.Local)
 		rightKey := digestDateKey(items[j], time.Local)
 		if leftKey == rightKey {
+			leftDate := historySortDate(items[i], time.Local)
+			rightDate := historySortDate(items[j], time.Local)
+			if !leftDate.Equal(rightDate) {
+				if leftDate.IsZero() {
+					return false
+				}
+				if rightDate.IsZero() {
+					return true
+				}
+				return leftDate.After(rightDate)
+			}
 			return items[i].GUID < items[j].GUID
 		}
 		if leftKey == "" {
@@ -283,15 +306,9 @@ func (h *History) DigestItems() []*HistoryItem {
 	return items
 }
 
-// ReplaceDigestItemsByDate replaces all digest items for the date with given items.
+// ReplaceDigestItemsByDate upserts digest items for the date while keeping
+// previously generated items for the same date.
 func (h *History) ReplaceDigestItemsByDate(dateKey string, items []*HistoryItem) {
-	for guid, hItem := range h.items {
-		if hItem == nil || hItem.kind() != NewsDigestKind || digestDateKey(hItem, time.Local) != dateKey {
-			continue
-		}
-		delete(h.items, guid)
-	}
-
 	for _, item := range items {
 		if item == nil || item.GUID == "" {
 			continue

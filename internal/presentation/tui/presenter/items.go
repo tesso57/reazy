@@ -206,6 +206,17 @@ func buildNewsDigestListItems(items []*reading.HistoryItem) []list.Item {
 		leftKey, _ := newsDigestDateKeyAndLabel(sorted[i])
 		rightKey, _ := newsDigestDateKeyAndLabel(sorted[j])
 		if leftKey == rightKey {
+			leftDate := articleSortDate(sorted[i])
+			rightDate := articleSortDate(sorted[j])
+			if !leftDate.Equal(rightDate) {
+				if leftDate.IsZero() {
+					return false
+				}
+				if rightDate.IsZero() {
+					return true
+				}
+				return leftDate.After(rightDate)
+			}
 			return sorted[i].GUID < sorted[j].GUID
 		}
 		if leftKey == unknownDateKey {

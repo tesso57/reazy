@@ -132,8 +132,8 @@ func TestManager_ReplaceDigestItemsByDate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadMetadata failed: %v", err)
 	}
-	if _, ok := meta["d_old_1"]; ok {
-		t.Fatal("old digest should be removed")
+	if _, ok := meta["d_old_1"]; !ok {
+		t.Fatal("old digest should be kept")
 	}
 	if _, ok := meta["d_keep"]; !ok {
 		t.Fatal("digest from other date should remain")

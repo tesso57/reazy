@@ -231,21 +231,20 @@ func buildDigestHistoryItems(dateKey string, topics []NewsDigestTopic, savedAt t
 	if loc == nil {
 		loc = time.Local
 	}
-	digestDate, err := time.ParseInLocation("2006-01-02", dateKey, loc)
-	if err != nil {
-		digestDate = savedAt.In(loc)
-	}
+	runAt := savedAt.In(loc)
+	runID := runAt.UTC().UnixNano()
 
 	items := make([]*reading.HistoryItem, 0, len(topics))
 	for index, topic := range topics {
 		items = append(items, &reading.HistoryItem{
-			GUID:         fmt.Sprintf("%s:%s:%d", reading.NewsDigestKind, dateKey, index+1),
-			Kind:         reading.NewsDigestKind,
-			Title:        topic.Title,
-			Description:  topic.Summary,
-			Content:      topic.Summary,
-			Published:    dateKey,
-			Date:         digestDate.Add(time.Duration(index) * time.Second),
+			GUID:        fmt.Sprintf("%s:%s:%019d:%03d", reading.NewsDigestKind, dateKey, runID, index+1),
+			Kind:        reading.NewsDigestKind,
+			Title:       topic.Title,
+			Description: topic.Summary,
+			Content:     topic.Summary,
+			Published:   dateKey,
+			// Keep topic order within one run while making newer runs naturally sort first.
+			Date:         runAt.Add(-time.Duration(index) * time.Nanosecond),
 			FeedTitle:    "Daily News",
 			FeedURL:      reading.NewsURL,
 			SavedAt:      savedAt,

@@ -145,7 +145,7 @@ UIに表示             Reducer (State update)
   - Intent: OpenFeed(`internal://news`)
   - Command: FetchFeed(registered feedsを集約) -> GenerateDailyNewsDigest(当日記事をAIトピック化)
   - Msg: FeedFetched -> NewsDigestGenerated
-  - State更新（digest cacheをHistoryへ日付単位で保存）→ Newsは日付グループ付きトピックカード履歴を表示 / 通常一覧は日付セクション表示
+  - State更新（digest cacheをHistoryへ日付単位で追記保存。同日更新でも過去トピックは保持）→ Newsは日付グループ付きトピックカード履歴を表示 / 通常一覧は日付セクション表示
 
 ### Migration Guide (v0 -> v1)
 移行を段階化して、動作を維持しながら責務を分離していくためのガイドです。
