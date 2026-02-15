@@ -538,7 +538,7 @@ func TestSidebarTitleVisibleDuringFilterInput(t *testing.T) {
 	assertStable("filter-input-2")
 }
 
-func TestArticleViewHeaderHiddenForNewsSectionHeader(t *testing.T) {
+func TestArticleViewHeaderVisibleForDateSectionHeader(t *testing.T) {
 	cfg := settings.Settings{
 		Feeds: []string{"http://example.com"},
 	}
@@ -548,9 +548,47 @@ func TestArticleViewHeaderHiddenForNewsSectionHeader(t *testing.T) {
 	m = tm.(*Model)
 
 	m.state.Session = state.ArticleView
+	m.state.CurrentFeed = &reading.Feed{URL: reading.AllFeedsURL, Title: "All Feeds"}
 	m.state.ArticleList.SetItems([]list.Item{
 		&presenter.Item{
 			TitleText:     "== 2026-02-14 (2) ==",
+			FeedTitleText: "2026-02-14 (Fri)",
+			SectionHeader: true,
+		},
+	})
+	m.state.ArticleList.Select(0)
+	update.UpdateListSizes(m.state)
+
+	viewOutput := m.View()
+	if !strings.Contains(viewOutput, "🔗") {
+		t.Fatalf("expected link header for section header selection, got: %s", viewOutput)
+	}
+	if !strings.Contains(viewOutput, "🏷️") {
+		t.Fatalf("expected feed header for section header selection, got: %s", viewOutput)
+	}
+	if !strings.Contains(viewOutput, reading.AllFeedsURL) {
+		t.Fatalf("expected fallback feed url in header for section header selection, got: %s", viewOutput)
+	}
+	if !strings.Contains(viewOutput, "2026-02-14") {
+		t.Fatalf("expected section label in feed header for section header selection, got: %s", viewOutput)
+	}
+}
+
+func TestArticleViewHeaderHiddenForNewsDateSectionHeader(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds: []string{"http://example.com"},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = tm.(*Model)
+
+	m.state.Session = state.ArticleView
+	m.state.CurrentFeed = &reading.Feed{URL: reading.NewsURL, Title: "News"}
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{
+			TitleText:     "== 2026-02-14 (2) ==",
+			FeedTitleText: "2026-02-14 (Fri)",
 			SectionHeader: true,
 		},
 	})
@@ -559,10 +597,10 @@ func TestArticleViewHeaderHiddenForNewsSectionHeader(t *testing.T) {
 
 	viewOutput := m.View()
 	if strings.Contains(viewOutput, "🔗") {
-		t.Fatalf("did not expect link header for section header selection, got: %s", viewOutput)
+		t.Fatalf("did not expect link header for news section header selection, got: %s", viewOutput)
 	}
 	if strings.Contains(viewOutput, "🏷️") {
-		t.Fatalf("did not expect feed header for section header selection, got: %s", viewOutput)
+		t.Fatalf("did not expect feed header for news section header selection, got: %s", viewOutput)
 	}
 }
 

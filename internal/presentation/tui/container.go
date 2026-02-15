@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tesso57/reazy/internal/domain/reading"
 	"github.com/tesso57/reazy/internal/presentation/tui/components/header"
 	main_view "github.com/tesso57/reazy/internal/presentation/tui/components/main"
 	"github.com/tesso57/reazy/internal/presentation/tui/components/modal"
@@ -59,21 +60,36 @@ func (m *Model) buildHeaderProps() header.Props {
 			// Main view has 1 padding left. Header has "🔗 " prefix (~3 chars).
 			// Safe buffer: metrics.HeaderWidthPadding.
 			availableWidth := mainWidth - metrics.HeaderWidthPadding
-			link = headerLine(currentItem.Link, availableWidth)
-			// For feed items, title is usually formatted index + title.
-			// But header Props expects "FeedTitle".
-			// In feedList item, we don't store FeedTitle explicitly?
-			// The item struct has feedTitle field.
-			// Let's check model.go logic.
-			feedTitle = headerLine(currentItem.FeedTitleText, availableWidth)
-			// If feedTitle is empty (e.g. initial item for feedList doesn't populate feedTitle?),
-			// use Title.
-			if feedTitle == "" {
-				// In feedList, title is "1. URL". link is URL.
-				// We can use link as title if feedTitle is missing.
-				// Or m.currentFeed.Title if available and matches?
-				// Simple fallback:
-				feedTitle = headerLine(currentItem.TitleText, availableWidth)
+			// Date-section items don't have article URLs; keep header rows stable by
+			// falling back to the selected feed URL.
+			if currentItem.IsSectionHeader() {
+				linkSource := currentItem.Link
+				if linkSource == "" && m.state.CurrentFeed != nil {
+					linkSource = m.state.CurrentFeed.URL
+				}
+				link = headerLine(linkSource, availableWidth)
+
+				feedTitle = headerLine(currentItem.FeedTitleText, availableWidth)
+				if feedTitle == "" {
+					feedTitle = headerLine(currentItem.TitleText, availableWidth)
+				}
+			} else {
+				link = headerLine(currentItem.Link, availableWidth)
+				// For feed items, title is usually formatted index + title.
+				// But header Props expects "FeedTitle".
+				// In feedList item, we don't store FeedTitle explicitly?
+				// The item struct has feedTitle field.
+				// Let's check model.go logic.
+				feedTitle = headerLine(currentItem.FeedTitleText, availableWidth)
+				// If feedTitle is empty (e.g. initial item for feedList doesn't populate feedTitle?),
+				// use Title.
+				if feedTitle == "" {
+					// In feedList, title is "1. URL". link is URL.
+					// We can use link as title if feedTitle is missing.
+					// Or m.currentFeed.Title if available and matches?
+					// Simple fallback:
+					feedTitle = headerLine(currentItem.TitleText, availableWidth)
+				}
 			}
 		}
 	}
@@ -176,11 +192,13 @@ func headerVisible(st *state.ModelState) bool {
 	case state.FeedView, state.DetailView:
 		return true
 	case state.ArticleView:
-		if item, ok := st.ArticleList.SelectedItem().(*presenter.Item); ok && item != nil && item.IsSectionHeader() {
-			return false
-		}
-		if item, ok := st.ArticleList.SelectedItem().(*presenter.Item); ok && item != nil && item.IsNewsDigest() {
-			return false
+		if item, ok := st.ArticleList.SelectedItem().(*presenter.Item); ok && item != nil {
+			if item.IsNewsDigest() {
+				return false
+			}
+			if item.IsSectionHeader() && st.CurrentFeed != nil && st.CurrentFeed.URL == reading.NewsURL {
+				return false
+			}
 		}
 		return true
 	case state.NewsTopicView:
