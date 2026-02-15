@@ -11,6 +11,7 @@ import (
 	"github.com/tesso57/reazy/internal/application/settings"
 	"github.com/tesso57/reazy/internal/application/usecase"
 	"github.com/tesso57/reazy/internal/domain/reading"
+	"github.com/tesso57/reazy/internal/domain/subscription"
 	"github.com/tesso57/reazy/internal/presentation/tui/presenter"
 	"github.com/tesso57/reazy/internal/presentation/tui/state"
 	"github.com/tesso57/reazy/internal/presentation/tui/update"
@@ -25,6 +26,7 @@ type Model struct {
 	reading       *usecase.ReadingService
 	insights      *usecase.InsightService
 	newsDigests   *usecase.NewsDigestService
+	feedGrouping  *usecase.FeedGroupingService
 	state         *state.ModelState
 }
 
@@ -36,12 +38,13 @@ func NewModel(cfg settings.Settings, subscriptions *usecase.SubscriptionService,
 		readingSvc,
 		usecase.NewInsightService(nil, nil),
 		usecase.NewNewsDigestService(nil, nil, nil),
+		usecase.NewFeedGroupingService(nil),
 	)
 }
 
 // NewModelWithInsights creates a new application model with AI insights support.
 func NewModelWithInsights(cfg settings.Settings, subscriptions *usecase.SubscriptionService, readingSvc *usecase.ReadingService, insightSvc *usecase.InsightService) *Model {
-	return NewModelWithServices(cfg, subscriptions, readingSvc, insightSvc, usecase.NewNewsDigestService(nil, nil, nil))
+	return NewModelWithServices(cfg, subscriptions, readingSvc, insightSvc, usecase.NewNewsDigestService(nil, nil, nil), usecase.NewFeedGroupingService(nil))
 }
 
 // NewModelWithServices creates a new application model with all optional AI services.
@@ -51,6 +54,7 @@ func NewModelWithServices(
 	readingSvc *usecase.ReadingService,
 	insightSvc *usecase.InsightService,
 	newsDigestSvc *usecase.NewsDigestService,
+	feedGroupingSvc *usecase.FeedGroupingService,
 ) *Model {
 	return new(Model{
 		settings:      cfg,
@@ -58,6 +62,7 @@ func NewModelWithServices(
 		reading:       readingSvc,
 		insights:      insightSvc,
 		newsDigests:   newsDigestSvc,
+		feedGrouping:  feedGroupingSvc,
 		state:         newModelState(cfg, readingSvc),
 	})
 }
@@ -85,6 +90,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, update.HandleFeedFetchedMsg(m.state, msg, m.deps()))
 	case update.NewsDigestGeneratedMsg:
 		update.HandleNewsDigestGeneratedMsg(m.state, msg, m.deps())
+	case update.FeedGroupingCompletedMsg:
+		update.HandleFeedGroupingCompletedMsg(m.state, msg)
 	case update.InsightGeneratedMsg:
 		update.HandleInsightGeneratedMsg(m.state, msg, m.deps())
 	case update.ArticleDetailLoadedMsg:
@@ -103,6 +110,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state.FeedList.Index() != prevIdx {
 			m.state.Err = nil
 			if i, ok := m.state.FeedList.SelectedItem().(*presenter.Item); ok {
+				if i.IsSectionHeader() {
+					m.state.Loading = false
+					cmds = append(cmds, cmd)
+					return m, tea.Batch(cmds...)
+				}
+
 				presenter.ApplyArticleList(&m.state.ArticleList, m.state.History, i.Link)
 				update.UpdateListSizes(m.state)
 
@@ -140,6 +153,7 @@ func (m *Model) deps() update.Deps {
 		Reading:       m.reading,
 		Insights:      m.insights,
 		NewsDigests:   m.newsDigests,
+		FeedGrouping:  m.feedGrouping,
 		OpenBrowser:   openBrowser,
 	}
 }
@@ -155,7 +169,8 @@ func newModelState(cfg settings.Settings, readingSvc *usecase.ReadingService) *s
 		Spinner:             newSpinner(),
 		Keys:                state.NewKeyMap(cfg.KeyMap),
 		History:             loadHistory(readingSvc),
-		Feeds:               append([]string(nil), cfg.Feeds...),
+		Feeds:               append([]string(nil), cfg.FlattenedFeeds()...),
+		FeedGroups:          cloneFeedGroups(cfg.FeedGroups),
 		ShowAISummary:       true,
 		DetailParentSession: state.ArticleView,
 	})
@@ -165,10 +180,24 @@ func newModelState(cfg settings.Settings, readingSvc *usecase.ReadingService) *s
 	st.ArticleList.KeyMap.PrevPage = st.Keys.UpPage
 	st.ArticleList.KeyMap.NextPage = st.Keys.DownPage
 
-	presenter.ApplyFeedList(&st.FeedList, st.Feeds)
+	presenter.ApplyFeedList(&st.FeedList, st.Feeds, st.FeedGroups)
 	presenter.ApplyArticleList(&st.ArticleList, st.History, reading.AllFeedsURL)
 
 	return st
+}
+
+func cloneFeedGroups(groups []subscription.FeedGroup) []subscription.FeedGroup {
+	if len(groups) == 0 {
+		return nil
+	}
+	out := make([]subscription.FeedGroup, 0, len(groups))
+	for _, group := range groups {
+		out = append(out, subscription.FeedGroup{
+			Name:  group.Name,
+			Feeds: append([]string(nil), group.Feeds...),
+		})
+	}
+	return out
 }
 
 func newFeedList(cfg settings.Settings) list.Model {

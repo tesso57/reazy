@@ -1,6 +1,8 @@
 // Package settings defines application-level configuration data.
 package settings
 
+import "github.com/tesso57/reazy/internal/domain/subscription"
+
 // KeyMapConfig defines the configuration for keybindings.
 type KeyMapConfig struct {
 	Up            string `yaml:"up" kong:"help='Up key',default='k'"`
@@ -16,6 +18,7 @@ type KeyMapConfig struct {
 	Quit          string `yaml:"quit" kong:"help='Quit key',default='q'"`
 	AddFeed       string `yaml:"add_feed" kong:"help='Add feed key',default='a'"`
 	DeleteFeed    string `yaml:"delete_feed" kong:"help='Delete feed key',default='x'"`
+	GroupFeeds    string `yaml:"group_feeds" kong:"help='AI group feeds key',default='z'"`
 	Refresh       string `yaml:"refresh" kong:"help='Refresh key',default='r'"`
 	Bookmark      string `yaml:"bookmark" kong:"help='Bookmark key',default='b'"`
 	Summarize     string `yaml:"summarize" kong:"help='Generate AI summary/tags key',default='s'"`
@@ -42,9 +45,24 @@ type CodexConfig struct {
 
 // Settings represents the application configuration.
 type Settings struct {
-	Feeds       []string     `yaml:"feeds" kong:"help='RSS/Atom Feed URLs',default='https://news.ycombinator.com/rss'"`
-	KeyMap      KeyMapConfig `yaml:"keymap" kong:"embed,prefix='keymap.'"`
-	Theme       ThemeConfig  `yaml:"theme" kong:"embed,prefix='theme.'"`
-	Codex       CodexConfig  `yaml:"codex" kong:"embed,prefix='codex.'"`
-	HistoryFile string       `yaml:"history_file" kong:"help='History file path'"`
+	Feeds       []string                 `yaml:"feeds" kong:"help='RSS/Atom Feed URLs',default='https://news.ycombinator.com/rss'"`
+	FeedGroups  []subscription.FeedGroup `yaml:"feed_groups"`
+	KeyMap      KeyMapConfig             `yaml:"keymap" kong:"embed,prefix='keymap.'"`
+	Theme       ThemeConfig              `yaml:"theme" kong:"embed,prefix='theme.'"`
+	Codex       CodexConfig              `yaml:"codex" kong:"embed,prefix='codex.'"`
+	HistoryFile string                   `yaml:"history_file" kong:"help='History file path'"`
+}
+
+// FlattenedFeeds returns grouped feeds first, then ungrouped feeds.
+func (s Settings) FlattenedFeeds() []string {
+	total := len(s.Feeds)
+	for _, group := range s.FeedGroups {
+		total += len(group.Feeds)
+	}
+	result := make([]string, 0, total)
+	for _, group := range s.FeedGroups {
+		result = append(result, group.Feeds...)
+	}
+	result = append(result, s.Feeds...)
+	return result
 }

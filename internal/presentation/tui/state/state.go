@@ -36,6 +36,10 @@ type KeyMap struct {
 	Quit          key.Binding
 	AddFeed       key.Binding
 	DeleteFeed    key.Binding
+	GroupFeeds    key.Binding
+	GroupJump     key.Binding
+	GroupNext     key.Binding
+	GroupPrev     key.Binding
 	Refresh       key.Binding
 	Bookmark      key.Binding
 	Summarize     key.Binding
@@ -45,7 +49,7 @@ type KeyMap struct {
 
 // ShortHelp returns a subset of keybindings for the help view.
 func (k *KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Quit, k.Back, k.Open}
+	return []key.Binding{k.Help, k.Quit, k.Back, k.Open, k.GroupFeeds, k.GroupJump, k.GroupNext, k.GroupPrev}
 }
 
 // FullHelp returns all keybindings for the help view.
@@ -54,8 +58,9 @@ func (k *KeyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.Left, k.Right},
 		{k.Top, k.Bottom, k.UpPage, k.DownPage},
 		{k.Open, k.Back, k.Quit},
-		{k.AddFeed, k.DeleteFeed, k.Refresh, k.Bookmark},
-		{k.Summarize, k.ToggleSummary, k.Help},
+		{k.AddFeed, k.DeleteFeed, k.GroupFeeds, k.Refresh},
+		{k.GroupJump, k.GroupNext, k.GroupPrev},
+		{k.Bookmark, k.Summarize, k.ToggleSummary, k.Help},
 	}
 }
 
@@ -113,6 +118,22 @@ func NewKeyMap(cfg settings.KeyMapConfig) KeyMap {
 		DeleteFeed: key.NewBinding(
 			key.WithKeys(splitKeys(cfg.DeleteFeed)...),
 			key.WithHelp(cfg.DeleteFeed, "delete"),
+		),
+		GroupFeeds: key.NewBinding(
+			key.WithKeys(splitKeys(cfg.GroupFeeds)...),
+			key.WithHelp(cfg.GroupFeeds, "ai group feeds"),
+		),
+		GroupJump: key.NewBinding(
+			key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
+			key.WithHelp("1-9/0", "jump section"),
+		),
+		GroupNext: key.NewBinding(
+			key.WithKeys("J"),
+			key.WithHelp("J", "next section"),
+		),
+		GroupPrev: key.NewBinding(
+			key.WithKeys("K"),
+			key.WithHelp("K", "prev section"),
 		),
 		Refresh: key.NewBinding(
 			key.WithKeys(splitKeys(cfg.Refresh)...),

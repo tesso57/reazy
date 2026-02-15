@@ -7,13 +7,14 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/tesso57/reazy/internal/domain/reading"
+	"github.com/tesso57/reazy/internal/domain/subscription"
 )
 
 func TestBuildFeedListItems(t *testing.T) {
 	items := BuildFeedListItems([]string{
 		"https://example.com/feed1.xml",
 		"https://example.com/feed2.xml",
-	})
+	}, nil)
 
 	if len(items) != 5 {
 		t.Fatalf("len(items) = %d, want 5", len(items))
@@ -38,6 +39,49 @@ func TestBuildFeedListItems(t *testing.T) {
 	assertItem(2, "2. * Bookmarks", reading.BookmarksURL)
 	assertItem(3, "3. https://example.com/feed1.xml", "https://example.com/feed1.xml")
 	assertItem(4, "4. https://example.com/feed2.xml", "https://example.com/feed2.xml")
+}
+
+func TestBuildFeedListItems_WithGroups(t *testing.T) {
+	items := BuildFeedListItems(
+		[]string{
+			"https://example.com/tech.xml",
+			"https://example.com/golang.xml",
+			"https://example.com/misc.xml",
+		},
+		[]subscription.FeedGroup{
+			{Name: "Tech", Feeds: []string{"https://example.com/tech.xml", "https://example.com/golang.xml"}},
+		},
+	)
+
+	if len(items) != 8 {
+		t.Fatalf("len(items) = %d, want 8", len(items))
+	}
+
+	header, ok := items[3].(*Item)
+	if !ok || !header.IsSectionHeader() {
+		t.Fatalf("items[3] should be a section header: %#v", items[3])
+	}
+	if header.TitleText != "== [1] Tech ==" {
+		t.Fatalf("items[3].TitleText = %q, want %q", header.TitleText, "== [1] Tech ==")
+	}
+
+	techItem := items[4].(*Item)
+	if techItem.SubscriptionIndex != 0 {
+		t.Fatalf("items[4].SubscriptionIndex = %d, want 0", techItem.SubscriptionIndex)
+	}
+	if techItem.GroupName != "Tech" {
+		t.Fatalf("items[4].GroupName = %q, want Tech", techItem.GroupName)
+	}
+
+	ungroupedHeader := items[6].(*Item)
+	if !ungroupedHeader.IsSectionHeader() || ungroupedHeader.TitleText != "== [2] Ungrouped ==" {
+		t.Fatalf("items[6] should be ungrouped header: %#v", ungroupedHeader)
+	}
+
+	ungroupedItem := items[7].(*Item)
+	if ungroupedItem.SubscriptionIndex != 2 {
+		t.Fatalf("items[7].SubscriptionIndex = %d, want 2", ungroupedItem.SubscriptionIndex)
+	}
 }
 
 func TestBuildArticleListItems_AddsDateSections(t *testing.T) {

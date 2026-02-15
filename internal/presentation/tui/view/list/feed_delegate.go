@@ -13,6 +13,7 @@ type FeedItem interface {
 	list.Item
 	Title() string
 	URL() string
+	IsSectionHeader() bool
 }
 
 // FeedDelegate handles rendering of feed items.
@@ -54,6 +55,9 @@ func (d FeedDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	title := i.Title()
 
 	style := itemStyle(d.Styles, m, index)
+	if i.IsSectionHeader() {
+		style = style.Bold(true).Foreground(lipgloss.Color("246"))
+	}
 	title = truncateItemText(m, style, title)
 	renderItemText(w, style, title)
 }

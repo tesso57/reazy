@@ -9,29 +9,32 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/tesso57/reazy/internal/domain/reading"
+	"github.com/tesso57/reazy/internal/domain/subscription"
 	"github.com/tesso57/reazy/internal/presentation/tui/textutil"
 )
 
 // Item is a view model for list items.
 type Item struct {
-	TitleText     string
-	RawTitle      string
-	Desc          string
-	Content       string
-	Link          string
-	Published     string
-	GUID          string
-	Read          bool
-	Bookmarked    bool
-	AISummary     string
-	AITags        []string
-	AIUpdatedAt   time.Time
-	FeedTitleText string
-	FeedURL       string
-	Kind          string
-	RelatedGUIDs  []string
-	SectionHeader bool
-	BodyHydrated  bool
+	TitleText         string
+	RawTitle          string
+	Desc              string
+	Content           string
+	Link              string
+	Published         string
+	GUID              string
+	Read              bool
+	Bookmarked        bool
+	AISummary         string
+	AITags            []string
+	AIUpdatedAt       time.Time
+	FeedTitleText     string
+	FeedURL           string
+	Kind              string
+	RelatedGUIDs      []string
+	SectionHeader     bool
+	BodyHydrated      bool
+	GroupName         string
+	SubscriptionIndex int
 }
 
 const (
@@ -81,38 +84,85 @@ func (i *Item) Description() string {
 }
 
 // BuildFeedListItems builds list items for the feed list.
-func BuildFeedListItems(feeds []string) []list.Item {
-	items := make([]list.Item, len(feeds)+BuiltinFeedItemCount)
-	items[BuiltinAllFeedsListIndex] = &Item{
+func BuildFeedListItems(feeds []string, groups []subscription.FeedGroup) []list.Item {
+	items := make([]list.Item, 0, len(feeds)+BuiltinFeedItemCount+len(groups)+1)
+	items = append(items, &Item{
 		TitleText: "0. * All Feeds",
 		RawTitle:  "All Feeds",
 		Link:      reading.AllFeedsURL,
-	}
-	items[BuiltinNewsListIndex] = &Item{
+	})
+	items = append(items, &Item{
 		TitleText: "1. * News",
 		RawTitle:  "News",
 		Link:      reading.NewsURL,
-	}
-	items[BuiltinBookmarksListIndex] = &Item{
+	})
+	items = append(items, &Item{
 		TitleText: "2. * Bookmarks",
 		RawTitle:  "Bookmarks",
 		Link:      reading.BookmarksURL,
-	}
+	})
 
-	for i, f := range feeds {
-		index := i + BuiltinFeedItemCount
-		items[index] = &Item{
-			TitleText: fmt.Sprintf("%d. %s", index, textutil.SingleLine(f)),
-			RawTitle:  f,
-			Link:      f,
+	displayIndex := BuiltinFeedItemCount
+	subscriptionIndex := 0
+	renderedGroup := false
+	groupDisplayIndex := 1
+
+	for _, group := range groups {
+		if strings.TrimSpace(group.Name) == "" || len(group.Feeds) == 0 {
+			continue
+		}
+		renderedGroup = true
+		items = append(items, &Item{
+			TitleText:     fmt.Sprintf("== [%d] %s ==", groupDisplayIndex, textutil.SingleLine(group.Name)),
+			RawTitle:      group.Name,
+			FeedTitleText: group.Name,
+			SectionHeader: true,
+		})
+		groupDisplayIndex++
+
+		for range group.Feeds {
+			if subscriptionIndex >= len(feeds) {
+				break
+			}
+			feedURL := feeds[subscriptionIndex]
+			items = append(items, &Item{
+				TitleText:         fmt.Sprintf("%d. %s", displayIndex, textutil.SingleLine(feedURL)),
+				RawTitle:          feedURL,
+				Link:              feedURL,
+				GroupName:         group.Name,
+				SubscriptionIndex: subscriptionIndex,
+			})
+			displayIndex++
+			subscriptionIndex++
 		}
 	}
+
+	if renderedGroup && subscriptionIndex < len(feeds) {
+		items = append(items, &Item{
+			TitleText:     fmt.Sprintf("== [%d] Ungrouped ==", groupDisplayIndex),
+			RawTitle:      "Ungrouped",
+			FeedTitleText: "Ungrouped",
+			SectionHeader: true,
+		})
+	}
+	for subscriptionIndex < len(feeds) {
+		feedURL := feeds[subscriptionIndex]
+		items = append(items, &Item{
+			TitleText:         fmt.Sprintf("%d. %s", displayIndex, textutil.SingleLine(feedURL)),
+			RawTitle:          feedURL,
+			Link:              feedURL,
+			SubscriptionIndex: subscriptionIndex,
+		})
+		displayIndex++
+		subscriptionIndex++
+	}
+
 	return items
 }
 
 // ApplyFeedList updates the list model with feed items.
-func ApplyFeedList(model *list.Model, feeds []string) {
-	model.SetItems(BuildFeedListItems(feeds))
+func ApplyFeedList(model *list.Model, feeds []string, groups []subscription.FeedGroup) {
+	model.SetItems(BuildFeedListItems(feeds, groups))
 }
 
 // BuildArticleListItems builds list items for articles.

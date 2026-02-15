@@ -14,12 +14,16 @@ import (
 type testFeedItem struct {
 	title string
 	url   string
+	sec   bool
 }
 
 func (m testFeedItem) Title() string       { return m.title }
 func (m testFeedItem) Description() string { return "" }
 func (m testFeedItem) FilterValue() string { return m.title }
 func (m testFeedItem) URL() string         { return m.url }
+func (m testFeedItem) IsSectionHeader() bool {
+	return m.sec
+}
 
 func TestNewFeedDelegate(t *testing.T) {
 	d := NewFeedDelegate(lipgloss.Color("205"))
@@ -57,6 +61,13 @@ func TestFeedDelegate_Render(t *testing.T) {
 			index:    0,
 			mdlIndex: 0, // Selected
 			contains: "Selected Feed",
+		},
+		{
+			name:     "Section Header",
+			item:     testFeedItem{title: "== Tech ==", sec: true},
+			index:    0,
+			mdlIndex: 1, // Not selected
+			contains: "== Tech ==",
 		},
 		{
 			name:     "Invalid Item",

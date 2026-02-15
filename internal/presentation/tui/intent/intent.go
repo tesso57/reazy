@@ -16,6 +16,7 @@ const (
 	ToggleHelp
 	AddFeed
 	DeleteFeed
+	GroupFeeds
 	Open
 	Back
 	Refresh
@@ -40,6 +41,8 @@ func FromKeyMsg(msg tea.KeyMsg, keys state.KeyMap) Intent {
 		return Intent{Type: AddFeed}
 	case key.Matches(msg, keys.DeleteFeed):
 		return Intent{Type: DeleteFeed}
+	case key.Matches(msg, keys.GroupFeeds):
+		return Intent{Type: GroupFeeds}
 	case key.Matches(msg, keys.Right) || key.Matches(msg, keys.Open):
 		return Intent{Type: Open}
 	case key.Matches(msg, keys.Left) || key.Matches(msg, keys.Back):

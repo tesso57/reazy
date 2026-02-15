@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tesso57/reazy/internal/application/usecase"
 	"github.com/tesso57/reazy/internal/domain/reading"
+	"github.com/tesso57/reazy/internal/domain/subscription"
 	"github.com/tesso57/reazy/internal/presentation/tui/intent"
 	"github.com/tesso57/reazy/internal/presentation/tui/presenter"
 	"github.com/tesso57/reazy/internal/presentation/tui/state"
@@ -23,6 +24,7 @@ type Deps struct {
 	Reading       *usecase.ReadingService
 	Insights      *usecase.InsightService
 	NewsDigests   *usecase.NewsDigestService
+	FeedGrouping  *usecase.FeedGroupingService
 	OpenBrowser   func(string) error
 }
 
@@ -55,6 +57,14 @@ type NewsDigestGeneratedMsg struct {
 	Items     []*reading.HistoryItem
 	UsedCache bool
 	Force     bool
+	Err       error
+}
+
+// FeedGroupingCompletedMsg is emitted after AI feed grouping is applied.
+type FeedGroupingCompletedMsg struct {
+	Feeds     []string
+	Groups    []subscription.FeedGroup
+	Ungrouped []string
 	Err       error
 }
 
@@ -120,6 +130,45 @@ func GenerateDailyNewsDigestCmd(newsSvc *usecase.NewsDigestService, readingSvc *
 	}
 }
 
+// GenerateFeedGroupingCmd creates a command to group feeds by AI and persist config.
+func GenerateFeedGroupingCmd(groupingSvc *usecase.FeedGroupingService, subscriptions *usecase.SubscriptionService, feeds []string) tea.Cmd {
+	feedSnapshot := append([]string(nil), feeds...)
+	return func() tea.Msg {
+		if groupingSvc == nil {
+			return FeedGroupingCompletedMsg{Err: fmt.Errorf("codex integration is disabled")}
+		}
+		if subscriptions == nil {
+			return FeedGroupingCompletedMsg{Err: fmt.Errorf("subscription service is not configured")}
+		}
+
+		result, err := groupingSvc.Group(context.Background(), feedSnapshot)
+		if err != nil {
+			return FeedGroupingCompletedMsg{Err: err}
+		}
+
+		updatedFeeds, supported, err := subscriptions.ReplaceFeedGroups(result.Groups, result.Ungrouped)
+		if err != nil {
+			return FeedGroupingCompletedMsg{Err: err}
+		}
+		if !supported {
+			return FeedGroupingCompletedMsg{Err: fmt.Errorf("feed grouping persistence is not supported")}
+		}
+
+		persistedGroups := result.Groups
+		if groups, ok, err := subscriptions.ListGroups(); err != nil {
+			return FeedGroupingCompletedMsg{Err: err}
+		} else if ok {
+			persistedGroups = groups
+		}
+
+		return FeedGroupingCompletedMsg{
+			Feeds:     updatedFeeds,
+			Groups:    persistedGroups,
+			Ungrouped: result.Ungrouped,
+		}
+	}
+}
+
 // LoadArticleDetailCmd loads one article body from persistence.
 func LoadArticleDetailCmd(readingSvc *usecase.ReadingService, guid string, silent bool) tea.Cmd {
 	guid = strings.TrimSpace(guid)
@@ -163,6 +212,9 @@ func HandleKeyMsg(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.Cmd, bool
 		return handleDeleteFeedView(s, msg, deps)
 	}
 	if handleFilterExitWithJJ(s, msg) {
+		return nil, true
+	}
+	if handleSectionJump(s, msg) {
 		return nil, true
 	}
 
@@ -217,6 +269,127 @@ func activeListForFiltering(s *state.ModelState) (*list.Model, bool) {
 	default:
 		return nil, false
 	}
+}
+
+func handleSectionJump(s *state.ModelState, msg tea.KeyMsg) bool {
+	if s == nil {
+		return false
+	}
+
+	activeList, ok := activeListForFiltering(s)
+	if !ok || activeList.FilterState() == list.Filtering {
+		return false
+	}
+
+	switch msg.String() {
+	case "J":
+		return jumpSelectionToAdjacentSection(activeList, 1)
+	case "K":
+		return jumpSelectionToAdjacentSection(activeList, -1)
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		sectionNumber := int(msg.String()[0] - '0')
+		return jumpSelectionToSectionNumber(activeList, sectionNumber)
+	case "0":
+		return jumpSelectionToSectionNumber(activeList, 10)
+	default:
+		return false
+	}
+}
+
+func jumpSelectionToAdjacentSection(model *list.Model, direction int) bool {
+	if model == nil {
+		return false
+	}
+	headers := sectionHeaderIndexes(model.Items())
+	if len(headers) == 0 {
+		return false
+	}
+
+	currentIndex := model.Index()
+	currentHeader := -1
+	for _, headerIndex := range headers {
+		if headerIndex <= currentIndex {
+			currentHeader = headerIndex
+			continue
+		}
+		break
+	}
+
+	targetHeader := -1
+	switch {
+	case direction > 0:
+		for _, headerIndex := range headers {
+			if headerIndex > currentHeader {
+				targetHeader = headerIndex
+				break
+			}
+		}
+	case direction < 0:
+		if currentHeader < 0 {
+			return true
+		}
+		for _, headerIndex := range headers {
+			if headerIndex >= currentHeader {
+				break
+			}
+			targetHeader = headerIndex
+		}
+	}
+	if targetHeader < 0 {
+		return true
+	}
+
+	selectFirstItemInSection(model, targetHeader)
+	return true
+}
+
+func jumpSelectionToSectionNumber(model *list.Model, sectionNumber int) bool {
+	if model == nil {
+		return false
+	}
+	headers := sectionHeaderIndexes(model.Items())
+	if len(headers) == 0 {
+		return false
+	}
+	if sectionNumber <= 0 || sectionNumber > len(headers) {
+		return true
+	}
+
+	selectFirstItemInSection(model, headers[sectionNumber-1])
+	return true
+}
+
+func sectionHeaderIndexes(items []list.Item) []int {
+	headers := make([]int, 0, len(items))
+	for index, item := range items {
+		feedItem, ok := item.(*presenter.Item)
+		if !ok || feedItem == nil || !feedItem.IsSectionHeader() {
+			continue
+		}
+		headers = append(headers, index)
+	}
+	return headers
+}
+
+func selectFirstItemInSection(model *list.Model, headerIndex int) {
+	if model == nil || headerIndex < 0 || headerIndex >= len(model.Items()) {
+		return
+	}
+
+	items := model.Items()
+	targetIndex := headerIndex
+	for index := headerIndex + 1; index < len(items); index++ {
+		feedItem, ok := items[index].(*presenter.Item)
+		if !ok || feedItem == nil {
+			continue
+		}
+		if feedItem.IsSectionHeader() {
+			break
+		}
+		targetIndex = index
+		break
+	}
+	model.Select(targetIndex)
 }
 
 // HandleWindowSize updates layout sizing based on terminal size.
@@ -294,6 +467,30 @@ func HandleNewsDigestGeneratedMsg(s *state.ModelState, msg NewsDigestGeneratedMs
 	if s.CurrentFeed != nil && s.CurrentFeed.URL == reading.NewsURL {
 		presenter.ApplyArticleList(&s.ArticleList, s.History, reading.NewsURL)
 	}
+}
+
+// HandleFeedGroupingCompletedMsg applies grouped feeds to state.
+func HandleFeedGroupingCompletedMsg(s *state.ModelState, msg FeedGroupingCompletedMsg) {
+	s.Loading = false
+	s.AIStatus = ""
+	defer UpdateListSizes(s)
+
+	if msg.Err != nil {
+		s.Err = msg.Err
+		s.StatusMessage = fmt.Sprintf("AI feed grouping failed: %s", strings.TrimSpace(msg.Err.Error()))
+		return
+	}
+
+	s.Err = nil
+	s.Feeds = append([]string(nil), msg.Feeds...)
+	s.FeedGroups = cloneFeedGroups(msg.Groups)
+	presenter.ApplyFeedList(&s.FeedList, s.Feeds, s.FeedGroups)
+
+	groupedCount := len(msg.Feeds) - len(msg.Ungrouped)
+	if groupedCount < 0 {
+		groupedCount = 0
+	}
+	s.StatusMessage = fmt.Sprintf("AI grouped %d feeds into %d groups", groupedCount, len(msg.Groups))
 }
 
 // HandleInsightGeneratedMsg applies AI-generated summary/tags to history and visible items.
@@ -380,7 +577,8 @@ func handleAddingFeedView(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.C
 				s.Err = err
 			} else {
 				s.Feeds = feeds
-				presenter.ApplyFeedList(&s.FeedList, s.Feeds)
+				syncFeedGroupsFromRepository(s, deps)
+				presenter.ApplyFeedList(&s.FeedList, s.Feeds, s.FeedGroups)
 				UpdateListSizes(s)
 			}
 			s.TextInput.Reset()
@@ -413,13 +611,16 @@ func handleDeleteFeedView(s *state.ModelState, msg tea.KeyMsg, deps Deps) (tea.C
 	switch msg.String() {
 	case "y", "Y":
 		if item, ok := selectedFeedItem(s); ok && !reading.IsVirtualFeedURL(item.Link) {
-			if realIndex, ok := subscriptionIndexByURL(s.Feeds, item.Link); ok {
-				feeds, err := deps.Subscriptions.Remove(realIndex)
+			if item.SubscriptionIndex >= 0 && item.SubscriptionIndex < len(s.Feeds) {
+				feeds, err := deps.Subscriptions.Remove(item.SubscriptionIndex)
 				if err != nil {
 					s.Err = err
 				} else {
 					s.Feeds = feeds
-					presenter.ApplyFeedList(&s.FeedList, s.Feeds)
+					if !syncFeedGroupsFromRepository(s, deps) {
+						removeFeedFromGroupState(s, item.GroupName, item.Link)
+					}
+					presenter.ApplyFeedList(&s.FeedList, s.Feeds, s.FeedGroups)
 					UpdateListSizes(s)
 				}
 			}
@@ -437,6 +638,9 @@ func handleFeedViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (tea
 	switch in.Type {
 	case intent.Open:
 		if i, ok := s.FeedList.SelectedItem().(*presenter.Item); ok {
+			if i.IsSectionHeader() {
+				return nil, true
+			}
 			s.Loading = true
 			s.Session = state.ArticleView
 			s.ArticleList.ResetSelected()
@@ -455,11 +659,21 @@ func handleFeedViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (tea
 			s.Session = state.DeleteFeedView
 		}
 		return nil, true
+	case intent.GroupFeeds, intent.Summarize:
+		return startFeedGrouping(s, deps), true
 	case intent.ToggleHelp:
 		s.Help.ShowAll = !s.Help.ShowAll
 		return nil, true
 	}
 	return nil, false
+}
+
+func startFeedGrouping(s *state.ModelState, deps Deps) tea.Cmd {
+	s.Loading = true
+	s.Err = nil
+	s.StatusMessage = ""
+	s.AIStatus = "AI: grouping feeds..."
+	return tea.Batch(s.Spinner.Tick, GenerateFeedGroupingCmd(deps.FeedGrouping, deps.Subscriptions, s.Feeds))
 }
 
 func handleArticleViewIntent(s *state.ModelState, in intent.Intent, deps Deps) (tea.Cmd, bool) {
@@ -716,10 +930,67 @@ func selectedFeedItem(s *state.ModelState) (*presenter.Item, bool) {
 		return nil, false
 	}
 	item, ok := s.FeedList.SelectedItem().(*presenter.Item)
-	if !ok || item == nil {
+	if !ok || item == nil || item.IsSectionHeader() {
 		return nil, false
 	}
 	return item, true
+}
+
+func syncFeedGroupsFromRepository(s *state.ModelState, deps Deps) bool {
+	if s == nil || deps.Subscriptions == nil {
+		return false
+	}
+	groups, supported, err := deps.Subscriptions.ListGroups()
+	if err != nil {
+		s.Err = err
+		return false
+	}
+	if !supported {
+		return false
+	}
+	s.FeedGroups = groups
+	return true
+}
+
+func removeFeedFromGroupState(s *state.ModelState, groupName, targetURL string) {
+	if s == nil || targetURL == "" {
+		return
+	}
+	groupName = strings.TrimSpace(groupName)
+	if groupName == "" {
+		return
+	}
+
+	for groupIndex := range s.FeedGroups {
+		if s.FeedGroups[groupIndex].Name != groupName {
+			continue
+		}
+		feeds := s.FeedGroups[groupIndex].Feeds
+		for feedIndex, feedURL := range feeds {
+			if feedURL != targetURL {
+				continue
+			}
+			s.FeedGroups[groupIndex].Feeds = append(feeds[:feedIndex], feeds[feedIndex+1:]...)
+			if len(s.FeedGroups[groupIndex].Feeds) == 0 {
+				s.FeedGroups = append(s.FeedGroups[:groupIndex], s.FeedGroups[groupIndex+1:]...)
+			}
+			return
+		}
+	}
+}
+
+func cloneFeedGroups(groups []subscription.FeedGroup) []subscription.FeedGroup {
+	if len(groups) == 0 {
+		return nil
+	}
+	out := make([]subscription.FeedGroup, 0, len(groups))
+	for _, group := range groups {
+		out = append(out, subscription.FeedGroup{
+			Name:  group.Name,
+			Feeds: append([]string(nil), group.Feeds...),
+		})
+	}
+	return out
 }
 
 func selectedActionableArticleItem(s *state.ModelState) (*presenter.Item, bool) {
@@ -731,15 +1002,6 @@ func selectedActionableArticleItem(s *state.ModelState) (*presenter.Item, bool) 
 		return nil, false
 	}
 	return item, true
-}
-
-func subscriptionIndexByURL(feeds []string, targetURL string) (int, bool) {
-	for index, feedURL := range feeds {
-		if feedURL == targetURL {
-			return index, true
-		}
-	}
-	return 0, false
 }
 
 func enterNewsTopicView(s *state.ModelState, digestItem *presenter.Item) {

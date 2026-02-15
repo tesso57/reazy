@@ -13,7 +13,7 @@ This document provides context for AI agents working on the Reazy codebase.
 - `cmd/reazy`: Entry point (`main.go`).
 - `internal/domain/reading`: Feed/History domain models.
 - `internal/domain/subscription`: Subscription domain model.
-- `internal/application/settings`: Application settings types (keymap/theme/etc).
+- `internal/application/settings`: Application settings types (keymap/theme/feed_groups/etc).
 - `internal/application/usecase`: Application services.
 - `internal/infrastructure/config`: Configuration storage using `kong` and `yaml.v3`.
 - `internal/infrastructure/feed`: RSS parsing logic wrapping `gofeed`.
@@ -28,7 +28,6 @@ This document provides context for AI agents working on the Reazy codebase.
 - `internal/presentation/tui/view`: Layout + render orchestration.
 - `internal/presentation/tui/view/list`: List item delegates (feed/article).
 - `docs/architecture.md`: Current architecture overview.
-- `TASKS.md`: Task definitions for `xc`.
 
 ## Documentation Notes
 - `README.md` と `README_ja.md` は対外向け資料のため、内部設計・実装事情・アーキテクチャ説明は記載しない。
@@ -44,8 +43,10 @@ This document provides context for AI agents working on the Reazy codebase.
 - **Dependency Injection**: Use variables like `feed.ParserFunc` to mock external dependencies (network calls) in tests.
 - **History Persistence**: History is stored in SQLite with differential updates (`mark read`, `bookmark`, `insight`, `digest replace`) instead of full snapshot rewrites.
 - **AI Insights**: Insight generation belongs to Application usecases and depends on abstract text-generation clients. Infrastructure only provides concrete AI clients (currently Codex CLI via `codex.*` config).
+- **AI Feed Grouping**: Feed grouping generation belongs to Application usecases and returns validated `feed_groups` + ungrouped feeds; persistence remains in config infrastructure.
 - **News Tab**: `internal://news` is a built-in virtual feed that shows AI-generated daily digest topic cards. Digest items are stored as `news_digest` and kept as date-grouped history.
 - **Date Sections**: Date section headers are applied to normal article lists (`All Feeds` / `Bookmarks` / each feed), not to `News`.
+- **Feed Grouping**: Optional `feed_groups` in config can organize sidebar feeds into named sections; grouped feeds are listed first, then ungrouped feeds.
 
 ## Tools
 - `xc`: Task runner. Use `xc [task]` to run predefined tasks.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/tesso57/reazy/internal/application/settings"
+	"github.com/tesso57/reazy/internal/domain/subscription"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,7 +59,13 @@ func Load(customPath ...string) (*Store, error) {
 	}
 
 	store.Settings = cfg
+	if groups, err := loadFeedGroupsFromConfig(configPath); err != nil {
+		return nil, err
+	} else if groups != nil {
+		store.Settings.FeedGroups = groups
+	}
 	store.Settings.Feeds = normalizeFeeds(store.Settings.Feeds)
+	store.Settings.FeedGroups = normalizeFeedGroups(store.Settings.FeedGroups)
 	store.Settings.HistoryFile = normalizeHistoryPath(store.Settings.HistoryFile)
 
 	// Set default history path if empty.
@@ -89,6 +96,48 @@ func normalizeFeeds(feeds []string) []string {
 		}
 	}
 	return normalized
+}
+
+func normalizeFeedGroups(groups []subscription.FeedGroup) []subscription.FeedGroup {
+	if len(groups) == 0 {
+		return groups
+	}
+
+	normalized := make([]subscription.FeedGroup, 0, len(groups))
+	for _, group := range groups {
+		name := strings.TrimSpace(group.Name)
+		if name == "" {
+			continue
+		}
+		feeds := normalizeFeeds(group.Feeds)
+		if len(feeds) == 0 {
+			continue
+		}
+		normalized = append(normalized, subscription.FeedGroup{
+			Name:  name,
+			Feeds: feeds,
+		})
+	}
+	return normalized
+}
+
+func loadFeedGroupsFromConfig(configPath string) ([]subscription.FeedGroup, error) {
+	f, err := os.Open(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	var raw struct {
+		FeedGroups []subscription.FeedGroup `yaml:"feed_groups"`
+	}
+	if err := yaml.NewDecoder(f).Decode(&raw); err != nil && err != io.EOF {
+		return nil, err
+	}
+	return raw.FeedGroups, nil
 }
 
 func defaultDataHome() string {
@@ -158,9 +207,30 @@ func yamlKongLoader(r io.Reader) (kong.Resolver, error) {
 
 // List returns the currently configured feed URLs.
 func (s *Store) List() ([]string, error) {
-	feeds := make([]string, len(s.Settings.Feeds))
-	copy(feeds, s.Settings.Feeds)
+	feeds := s.Settings.FlattenedFeeds()
 	return feeds, nil
+}
+
+// ListGroups returns configured feed groups.
+func (s *Store) ListGroups() ([]subscription.FeedGroup, error) {
+	if len(s.Settings.FeedGroups) == 0 {
+		return nil, nil
+	}
+	groups := make([]subscription.FeedGroup, 0, len(s.Settings.FeedGroups))
+	for _, group := range s.Settings.FeedGroups {
+		groups = append(groups, subscription.FeedGroup{
+			Name:  group.Name,
+			Feeds: append([]string(nil), group.Feeds...),
+		})
+	}
+	return groups, nil
+}
+
+// ReplaceFeedGroups replaces grouped and ungrouped feed settings.
+func (s *Store) ReplaceFeedGroups(groups []subscription.FeedGroup, ungrouped []string) error {
+	s.Settings.FeedGroups = normalizeFeedGroups(groups)
+	s.Settings.Feeds = normalizeFeeds(ungrouped)
+	return s.Save()
 }
 
 // Add appends a new feed URL and saves the configuration.
@@ -171,10 +241,26 @@ func (s *Store) Add(url string) error {
 
 // Remove deletes a feed by index and saves the configuration.
 func (s *Store) Remove(index int) error {
-	if index < 0 || index >= len(s.Settings.Feeds) {
+	total := len(s.Settings.FlattenedFeeds())
+	if index < 0 || index >= total {
 		return fmt.Errorf("invalid feed index: %d", index)
 	}
-	s.Settings.Feeds = append(s.Settings.Feeds[:index], s.Settings.Feeds[index+1:]...)
+
+	remaining := index
+	for groupIndex := range s.Settings.FeedGroups {
+		groupLen := len(s.Settings.FeedGroups[groupIndex].Feeds)
+		if remaining < groupLen {
+			feeds := s.Settings.FeedGroups[groupIndex].Feeds
+			s.Settings.FeedGroups[groupIndex].Feeds = append(feeds[:remaining], feeds[remaining+1:]...)
+			if len(s.Settings.FeedGroups[groupIndex].Feeds) == 0 {
+				s.Settings.FeedGroups = append(s.Settings.FeedGroups[:groupIndex], s.Settings.FeedGroups[groupIndex+1:]...)
+			}
+			return s.Save()
+		}
+		remaining -= groupLen
+	}
+
+	s.Settings.Feeds = append(s.Settings.Feeds[:remaining], s.Settings.Feeds[remaining+1:]...)
 	return s.Save()
 }
 

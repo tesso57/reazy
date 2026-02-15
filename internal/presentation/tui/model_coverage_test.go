@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"os/exec"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/tesso57/reazy/internal/application/settings"
 	"github.com/tesso57/reazy/internal/application/usecase"
 	"github.com/tesso57/reazy/internal/domain/reading"
+	"github.com/tesso57/reazy/internal/domain/subscription"
 	"github.com/tesso57/reazy/internal/infrastructure/history"
 	"github.com/tesso57/reazy/internal/presentation/tui/presenter"
 	"github.com/tesso57/reazy/internal/presentation/tui/state"
@@ -157,6 +159,311 @@ func TestHandleFeedViewKeys_AddDelete(t *testing.T) {
 	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
 	if tm.(*Model).state.Session != state.FeedView {
 		t.Error("Should not allow deleting Bookmarks tab")
+	}
+}
+
+func TestHandleFeedViewKeys_GroupFeeds(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds:  []string{"https://news.ycombinator.com/rss", "https://github.com/golang/go/releases.atom", "https://planetpython.org/rss20.xml"},
+		KeyMap: settings.KeyMapConfig{GroupFeeds: "z"},
+	}
+	repo := &stubSubscriptionRepo{feeds: cfg.Feeds}
+	m := newTestModelWithInsightAndNewsDigestAndGroupingGenerator(
+		cfg,
+		repo,
+		&stubHistoryRepo{},
+		&stubFeedFetcher{},
+		nil,
+		nil,
+		&stubFeedGroupingGenerator{
+			groups: []subscription.FeedGroup{
+				{
+					Name:  "Tech",
+					Feeds: []string{"https://news.ycombinator.com/rss", "https://github.com/golang/go/releases.atom"},
+				},
+			},
+		},
+	)
+	m.state.Session = state.FeedView
+
+	tm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}})
+	m = tm.(*Model)
+	if !m.state.Loading {
+		t.Fatal("Expected loading state while AI feed grouping runs")
+	}
+	if cmd == nil {
+		t.Fatal("Expected feed grouping command")
+	}
+
+	tm, _ = m.Update(update.FeedGroupingCompletedMsg{
+		Feeds: []string{
+			"https://news.ycombinator.com/rss",
+			"https://github.com/golang/go/releases.atom",
+			"https://planetpython.org/rss20.xml",
+		},
+		Groups: []subscription.FeedGroup{
+			{
+				Name:  "Tech",
+				Feeds: []string{"https://news.ycombinator.com/rss", "https://github.com/golang/go/releases.atom"},
+			},
+		},
+		Ungrouped: []string{"https://planetpython.org/rss20.xml"},
+	})
+	m = tm.(*Model)
+
+	if m.state.Loading {
+		t.Fatal("Expected loading false after feed grouping result")
+	}
+	if len(m.state.FeedGroups) != 1 || m.state.FeedGroups[0].Name != "Tech" {
+		t.Fatalf("unexpected feed groups: %#v", m.state.FeedGroups)
+	}
+	if !strings.Contains(m.state.StatusMessage, "AI grouped 2 feeds into 1 groups") {
+		t.Fatalf("unexpected status message: %q", m.state.StatusMessage)
+	}
+
+	foundHeader := false
+	for _, item := range m.state.FeedList.Items() {
+		it, ok := item.(*presenter.Item)
+		if !ok {
+			continue
+		}
+		if it.IsSectionHeader() && it.RawTitle == "Tech" {
+			foundHeader = true
+			break
+		}
+	}
+	if !foundHeader {
+		t.Fatal("expected grouped sidebar header after AI grouping")
+	}
+}
+
+func TestHandleFeedViewKeys_SummarizeTriggersGrouping(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds:  []string{"https://news.ycombinator.com/rss", "https://planetpython.org/rss20.xml"},
+		KeyMap: settings.KeyMapConfig{GroupFeeds: "z", Summarize: "s"},
+	}
+	repo := &stubSubscriptionRepo{feeds: cfg.Feeds}
+	m := newTestModelWithInsightAndNewsDigestAndGroupingGenerator(
+		cfg,
+		repo,
+		&stubHistoryRepo{},
+		&stubFeedFetcher{},
+		nil,
+		nil,
+		&stubFeedGroupingGenerator{
+			groups: []subscription.FeedGroup{
+				{
+					Name:  "Tech",
+					Feeds: []string{"https://news.ycombinator.com/rss"},
+				},
+			},
+		},
+	)
+	m.state.Session = state.FeedView
+
+	tm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m = tm.(*Model)
+	if !m.state.Loading {
+		t.Fatal("Expected loading state while AI feed grouping runs via summarize key")
+	}
+	if cmd == nil {
+		t.Fatal("Expected feed grouping command on summarize key in feed view")
+	}
+}
+
+func TestHandleFeedViewKeys_GroupJumpByNumber(t *testing.T) {
+	cfg := settings.Settings{
+		FeedGroups: []subscription.FeedGroup{
+			{
+				Name:  "Tech",
+				Feeds: []string{"https://a.example.com/rss", "https://b.example.com/rss"},
+			},
+			{
+				Name:  "AI",
+				Feeds: []string{"https://c.example.com/rss"},
+			},
+		},
+		Feeds: []string{"https://d.example.com/rss"},
+	}
+	m := newTestModel(
+		cfg,
+		&stubSubscriptionRepo{feeds: cfg.Feeds, groups: cfg.FeedGroups},
+		&stubHistoryRepo{},
+		&stubFeedFetcher{},
+	)
+	m.state.Session = state.FeedView
+
+	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	m = tm.(*Model)
+	if item, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok || item.Link != "https://a.example.com/rss" {
+		t.Fatalf("key '1' should jump to first group feed, got %#v", m.state.FeedList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	m = tm.(*Model)
+	if item, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok || item.Link != "https://c.example.com/rss" {
+		t.Fatalf("key '2' should jump to second group feed, got %#v", m.state.FeedList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m = tm.(*Model)
+	if item, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok || item.Link != "https://d.example.com/rss" {
+		t.Fatalf("key '3' should jump to ungrouped feed, got %#v", m.state.FeedList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+	m = tm.(*Model)
+	if item, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok || item.Link != "https://d.example.com/rss" {
+		t.Fatalf("out-of-range group key should keep current selection, got %#v", m.state.FeedList.SelectedItem())
+	}
+}
+
+func TestHandleFeedViewKeys_GroupJumpByJK(t *testing.T) {
+	cfg := settings.Settings{
+		FeedGroups: []subscription.FeedGroup{
+			{
+				Name:  "Tech",
+				Feeds: []string{"https://a.example.com/rss"},
+			},
+			{
+				Name:  "AI",
+				Feeds: []string{"https://c.example.com/rss"},
+			},
+		},
+		Feeds: []string{"https://d.example.com/rss"},
+	}
+	m := newTestModel(
+		cfg,
+		&stubSubscriptionRepo{feeds: cfg.Feeds, groups: cfg.FeedGroups},
+		&stubHistoryRepo{},
+		&stubFeedFetcher{},
+	)
+	m.state.Session = state.FeedView
+
+	// From built-in tabs, J should jump to the first group.
+	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = tm.(*Model)
+	if item, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok || item.Link != "https://a.example.com/rss" {
+		t.Fatalf("key 'J' should jump to first group from built-ins, got %#v", m.state.FeedList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = tm.(*Model)
+	if item, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok || item.Link != "https://c.example.com/rss" {
+		t.Fatalf("second 'J' should jump to next group, got %#v", m.state.FeedList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = tm.(*Model)
+	if item, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok || item.Link != "https://d.example.com/rss" {
+		t.Fatalf("third 'J' should jump to ungrouped section, got %#v", m.state.FeedList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	m = tm.(*Model)
+	if item, ok := m.state.FeedList.SelectedItem().(*presenter.Item); !ok || item.Link != "https://c.example.com/rss" {
+		t.Fatalf("key 'K' should jump to previous group, got %#v", m.state.FeedList.SelectedItem())
+	}
+}
+
+func TestHandleArticleViewKeys_SectionJumpByNumber(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds: []string{"https://example.com/feed.xml"},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
+	m.state.Session = state.ArticleView
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{TitleText: "== 2026-02-15 (2) ==", SectionHeader: true},
+		&presenter.Item{TitleText: "1. A", GUID: "a"},
+		&presenter.Item{TitleText: "2. B", GUID: "b"},
+		&presenter.Item{TitleText: "== 2026-02-14 (1) ==", SectionHeader: true},
+		&presenter.Item{TitleText: "3. C", GUID: "c"},
+		&presenter.Item{TitleText: "== 2026-02-13 (1) ==", SectionHeader: true},
+		&presenter.Item{TitleText: "4. D", GUID: "d"},
+	})
+	m.state.ArticleList.Select(1)
+
+	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
+	m = tm.(*Model)
+	if item, ok := m.state.ArticleList.SelectedItem().(*presenter.Item); !ok || item.GUID != "c" {
+		t.Fatalf("key '2' should jump to second section, got %#v", m.state.ArticleList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m = tm.(*Model)
+	if item, ok := m.state.ArticleList.SelectedItem().(*presenter.Item); !ok || item.GUID != "d" {
+		t.Fatalf("key '3' should jump to third section, got %#v", m.state.ArticleList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'9'}})
+	m = tm.(*Model)
+	if item, ok := m.state.ArticleList.SelectedItem().(*presenter.Item); !ok || item.GUID != "d" {
+		t.Fatalf("out-of-range key should keep current selection, got %#v", m.state.ArticleList.SelectedItem())
+	}
+}
+
+func TestHandleArticleViewKeys_SectionJumpByJK(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds: []string{"https://example.com/feed.xml"},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
+	m.state.Session = state.ArticleView
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{TitleText: "== 2026-02-15 (2) ==", SectionHeader: true},
+		&presenter.Item{TitleText: "1. A", GUID: "a"},
+		&presenter.Item{TitleText: "2. B", GUID: "b"},
+		&presenter.Item{TitleText: "== 2026-02-14 (1) ==", SectionHeader: true},
+		&presenter.Item{TitleText: "3. C", GUID: "c"},
+		&presenter.Item{TitleText: "== 2026-02-13 (1) ==", SectionHeader: true},
+		&presenter.Item{TitleText: "4. D", GUID: "d"},
+	})
+	m.state.ArticleList.Select(1)
+
+	tm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = tm.(*Model)
+	if item, ok := m.state.ArticleList.SelectedItem().(*presenter.Item); !ok || item.GUID != "c" {
+		t.Fatalf("key 'J' should jump to next section, got %#v", m.state.ArticleList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = tm.(*Model)
+	if item, ok := m.state.ArticleList.SelectedItem().(*presenter.Item); !ok || item.GUID != "d" {
+		t.Fatalf("second 'J' should jump to next section, got %#v", m.state.ArticleList.SelectedItem())
+	}
+
+	tm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	m = tm.(*Model)
+	if item, ok := m.state.ArticleList.SelectedItem().(*presenter.Item); !ok || item.GUID != "c" {
+		t.Fatalf("key 'K' should jump to previous section, got %#v", m.state.ArticleList.SelectedItem())
+	}
+}
+
+func TestHandleFeedViewKeys_GroupFeedsError(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds:  []string{"https://a.example.com/rss", "https://b.example.com/rss"},
+		KeyMap: settings.KeyMapConfig{GroupFeeds: "z"},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
+	m.state.Session = state.FeedView
+
+	tm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}})
+	m = tm.(*Model)
+	if !m.state.Loading {
+		t.Fatal("Expected loading state while AI feed grouping runs")
+	}
+	if cmd == nil {
+		t.Fatal("Expected feed grouping command")
+	}
+
+	tm, _ = m.Update(update.FeedGroupingCompletedMsg{
+		Err: errors.New("codex integration is disabled"),
+	})
+	m = tm.(*Model)
+	if m.state.Err == nil {
+		t.Fatal("expected error on feed grouping failure")
+	}
+	if !strings.Contains(m.state.StatusMessage, "AI feed grouping failed") {
+		t.Fatalf("unexpected status message: %q", m.state.StatusMessage)
 	}
 }
 

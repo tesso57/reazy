@@ -1,6 +1,12 @@
 package state
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/tesso57/reazy/internal/application/settings"
+)
 
 func TestFooterText(t *testing.T) {
 	tests := []struct {
@@ -70,5 +76,23 @@ func TestFooterText(t *testing.T) {
 				t.Fatalf("FooterText() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFooterHelpText_TwoLines(t *testing.T) {
+	keys := NewKeyMap(settings.KeyMapConfig{
+		Up:         "k",
+		Down:       "j",
+		Left:       "h",
+		Right:      "l",
+		Open:       "enter",
+		Back:       "esc",
+		Quit:       "q",
+		GroupFeeds: "z",
+	})
+
+	got := FooterHelpText(help.New(), keys)
+	if strings.Count(got, "\n") != 1 {
+		t.Fatalf("FooterHelpText() should be two lines, got %q", got)
 	}
 }

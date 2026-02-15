@@ -9,11 +9,13 @@ import (
 	"github.com/tesso57/reazy/internal/application/settings"
 	"github.com/tesso57/reazy/internal/application/usecase"
 	"github.com/tesso57/reazy/internal/domain/reading"
+	"github.com/tesso57/reazy/internal/domain/subscription"
 )
 
 type stubSubscriptionRepo struct {
 	mock.Mock
-	feeds []string
+	feeds  []string
+	groups []subscription.FeedGroup
 }
 
 func (s *stubSubscriptionRepo) List() ([]string, error) {
@@ -22,9 +24,12 @@ func (s *stubSubscriptionRepo) List() ([]string, error) {
 		feeds, _ := args.Get(0).([]string)
 		return feeds, args.Error(1)
 	}
-	feeds := make([]string, len(s.feeds))
-	copy(feeds, s.feeds)
-	return feeds, nil
+	flattened := make([]string, 0, len(s.feeds))
+	for _, group := range s.groups {
+		flattened = append(flattened, group.Feeds...)
+	}
+	flattened = append(flattened, s.feeds...)
+	return flattened, nil
 }
 
 func (s *stubSubscriptionRepo) Add(url string) error {
@@ -41,10 +46,52 @@ func (s *stubSubscriptionRepo) Remove(index int) error {
 		args := s.Called(index)
 		return args.Error(0)
 	}
-	if index < 0 || index >= len(s.feeds) {
+	flattened, _ := s.List()
+	if index < 0 || index >= len(flattened) {
 		return fmt.Errorf("invalid feed index: %d", index)
 	}
-	s.feeds = append(s.feeds[:index], s.feeds[index+1:]...)
+
+	remaining := index
+	for groupIndex := range s.groups {
+		groupLen := len(s.groups[groupIndex].Feeds)
+		if remaining < groupLen {
+			feeds := s.groups[groupIndex].Feeds
+			s.groups[groupIndex].Feeds = append(feeds[:remaining], feeds[remaining+1:]...)
+			if len(s.groups[groupIndex].Feeds) == 0 {
+				s.groups = append(s.groups[:groupIndex], s.groups[groupIndex+1:]...)
+			}
+			return nil
+		}
+		remaining -= groupLen
+	}
+
+	s.feeds = append(s.feeds[:remaining], s.feeds[remaining+1:]...)
+	return nil
+}
+
+func (s *stubSubscriptionRepo) ListGroups() ([]subscription.FeedGroup, error) {
+	if len(s.groups) == 0 {
+		return nil, nil
+	}
+	out := make([]subscription.FeedGroup, 0, len(s.groups))
+	for _, group := range s.groups {
+		out = append(out, subscription.FeedGroup{
+			Name:  group.Name,
+			Feeds: append([]string(nil), group.Feeds...),
+		})
+	}
+	return out, nil
+}
+
+func (s *stubSubscriptionRepo) ReplaceFeedGroups(groups []subscription.FeedGroup, ungrouped []string) error {
+	s.groups = make([]subscription.FeedGroup, 0, len(groups))
+	for _, group := range groups {
+		s.groups = append(s.groups, subscription.FeedGroup{
+			Name:  group.Name,
+			Feeds: append([]string(nil), group.Feeds...),
+		})
+	}
+	s.feeds = append([]string(nil), ungrouped...)
 	return nil
 }
 
@@ -226,6 +273,21 @@ type stubNewsDigestGenerator struct {
 	err    error
 }
 
+type stubFeedGroupingGenerator struct {
+	mock.Mock
+	groups []subscription.FeedGroup
+	err    error
+}
+
+func (s *stubFeedGroupingGenerator) Generate(_ context.Context, _ usecase.FeedGroupingRequest) ([]subscription.FeedGroup, error) {
+	if len(s.ExpectedCalls) > 0 {
+		args := s.Called()
+		groups, _ := args.Get(0).([]subscription.FeedGroup)
+		return groups, args.Error(1)
+	}
+	return s.groups, s.err
+}
+
 func (s *stubNewsDigestGenerator) Generate(_ context.Context, _ usecase.NewsDigestRequest) ([]usecase.NewsDigestTopic, error) {
 	if len(s.ExpectedCalls) > 0 {
 		args := s.Called()
@@ -248,7 +310,7 @@ func newTestModelWithInsightGenerator(
 	fetcher usecase.FeedFetcher,
 	insightGen usecase.InsightGenerator,
 ) *Model {
-	return newTestModelWithInsightAndNewsDigestGenerator(cfg, subsRepo, historyRepo, fetcher, insightGen, nil)
+	return newTestModelWithInsightAndNewsDigestAndGroupingGenerator(cfg, subsRepo, historyRepo, fetcher, insightGen, nil, nil)
 }
 
 func newTestModelWithInsightAndNewsDigestGenerator(
@@ -259,9 +321,30 @@ func newTestModelWithInsightAndNewsDigestGenerator(
 	insightGen usecase.InsightGenerator,
 	newsDigestGen usecase.NewsDigestGenerator,
 ) *Model {
+	return newTestModelWithInsightAndNewsDigestAndGroupingGenerator(
+		cfg,
+		subsRepo,
+		historyRepo,
+		fetcher,
+		insightGen,
+		newsDigestGen,
+		nil,
+	)
+}
+
+func newTestModelWithInsightAndNewsDigestAndGroupingGenerator(
+	cfg settings.Settings,
+	subsRepo usecase.SubscriptionRepository,
+	historyRepo usecase.HistoryRepository,
+	fetcher usecase.FeedFetcher,
+	insightGen usecase.InsightGenerator,
+	newsDigestGen usecase.NewsDigestGenerator,
+	groupingGen usecase.FeedGroupingGenerator,
+) *Model {
 	subs := usecase.NewSubscriptionService(subsRepo)
 	readingSvc := usecase.NewReadingService(fetcher, historyRepo, nil)
 	insightSvc := usecase.NewInsightService(insightGen, nil)
 	newsSvc := usecase.NewNewsDigestService(newsDigestGen, nil, nil)
-	return NewModelWithServices(cfg, subs, readingSvc, insightSvc, newsSvc)
+	groupSvc := usecase.NewFeedGroupingService(groupingGen)
+	return NewModelWithServices(cfg, subs, readingSvc, insightSvc, newsSvc, groupSvc)
 }

@@ -105,10 +105,7 @@ func (m *Model) buildMainProps() main_view.Props {
 	var body string
 	switch {
 	case m.state.Loading:
-		message := "Loading feed..."
-		if m.state.AIStatus != "" {
-			message = m.state.AIStatus
-		}
+		message := loadingMessage(m.state)
 		body = fmt.Sprintf("\n\n   %s %s", m.state.Spinner.View(), message)
 	case m.state.Session == state.DetailView:
 		body = m.state.Viewport.View()
@@ -180,7 +177,7 @@ func (m *Model) buildModalProps() modal.Props {
 }
 
 func (m *Model) buildFooterProps() string {
-	helpText := m.state.Help.View(&m.state.Keys)
+	helpText := state.FooterHelpText(m.state.Help, m.state.Keys)
 	return state.FooterText(m.state.Session, m.state.Loading, m.state.AIStatus, m.state.StatusMessage, helpText)
 }
 
@@ -236,4 +233,27 @@ func buildNewsTopicBody(st *state.ModelState) string {
 		summary,
 		st.ArticleList.View(),
 	)
+}
+
+func loadingMessage(st *state.ModelState) string {
+	if st == nil {
+		return "Loading..."
+	}
+	if ai := strings.TrimSpace(st.AIStatus); ai != "" {
+		return ai
+	}
+
+	switch st.Session {
+	case state.DetailView:
+		return "Loading article..."
+	case state.ArticleView, state.NewsTopicView:
+		if st.CurrentFeed != nil && st.CurrentFeed.URL == reading.NewsURL {
+			return "Loading news..."
+		}
+		return "Loading feed..."
+	case state.FeedView:
+		return "Loading feeds..."
+	default:
+		return "Loading..."
+	}
 }

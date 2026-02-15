@@ -52,7 +52,7 @@ func buildLayoutMetrics(s *state.ModelState) layoutMetrics {
 
 func footerHeight(s *state.ModelState) int {
 	s.Help.Width = s.Width
-	helpText := s.Help.View(&s.Keys)
+	helpText := state.FooterHelpText(s.Help, s.Keys)
 	return lipgloss.Height(state.FooterText(s.Session, s.Loading, s.AIStatus, s.StatusMessage, helpText))
 }
 

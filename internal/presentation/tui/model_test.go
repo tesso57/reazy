@@ -538,6 +538,40 @@ func TestSidebarTitleVisibleDuringFilterInput(t *testing.T) {
 	assertStable("filter-input-2")
 }
 
+func TestDetailViewLoadingMessageUsesArticleLabel(t *testing.T) {
+	cfg := settings.Settings{
+		Feeds: []string{"http://example.com"},
+	}
+	m := newTestModel(cfg, &stubSubscriptionRepo{feeds: cfg.Feeds}, &stubHistoryRepo{}, &stubFeedFetcher{})
+
+	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = tm.(*Model)
+
+	m.state.Session = state.DetailView
+	m.state.Loading = true
+	m.state.AIStatus = ""
+	m.state.ArticleList.SetItems([]list.Item{
+		&presenter.Item{
+			TitleText:     "1. Detail loading",
+			RawTitle:      "Detail loading",
+			Desc:          "desc",
+			Content:       "",
+			Link:          "https://example.com/post",
+			FeedTitleText: "Example Feed",
+			GUID:          "guid-detail-loading",
+		},
+	})
+	m.state.ArticleList.Select(0)
+
+	viewOutput := m.View()
+	if !strings.Contains(viewOutput, "Loading article...") {
+		t.Fatalf("expected article loading message in detail view, got: %s", viewOutput)
+	}
+	if strings.Contains(viewOutput, "Loading feed...") {
+		t.Fatalf("unexpected feed loading message in detail view, got: %s", viewOutput)
+	}
+}
+
 func TestArticleViewHeaderVisibleForDateSectionHeader(t *testing.T) {
 	cfg := settings.Settings{
 		Feeds: []string{"http://example.com"},

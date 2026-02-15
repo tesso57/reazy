@@ -46,7 +46,7 @@ func newLayoutTestState() *state.ModelState {
 	keys := state.NewKeyMap(settings.KeyMapConfig{
 		Up: "k", Down: "j", Left: "h", Right: "l",
 		Open: "enter", Back: "esc", Quit: "q",
-		AddFeed: "a", DeleteFeed: "x", Refresh: "r", Bookmark: "b",
+		AddFeed: "a", DeleteFeed: "x", GroupFeeds: "G", Refresh: "r", Bookmark: "b",
 		Summarize: "s", ToggleSummary: "S",
 		UpPage: "pgup", DownPage: "pgdn", Top: "g", Bottom: "G",
 	})

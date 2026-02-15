@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/tesso57/reazy/internal/domain/reading"
+	"github.com/tesso57/reazy/internal/domain/subscription"
 )
 
 // ModelState holds the presentation state for the TUI.
@@ -32,6 +33,7 @@ type ModelState struct {
 	DetailParentSession    Session
 	History                *reading.History
 	Feeds                  []string
+	FeedGroups             []subscription.FeedGroup
 	PendingInsightGUID     string
 	PendingJJExit          bool
 	ForceNewsDigestRefresh bool

@@ -9,6 +9,8 @@ Reazy (Read + Lazy) is a modern, terminal-based RSS/Atom reader built with Go an
 - **Reading**: Browse feed items and open full articles in your default browser.
 - **Vim Bindings**: Navigation with `j`, `k`, `h`, `l`.
 - **Customizable**: Configurable keybindings and feed list via YAML.
+- **Feed Groups**: Organize feeds into named sidebar groups from config.
+- **AI Feed Grouping (Optional)**: Automatically propose feed groups from your subscriptions and apply them to `feed_groups`.
 - **Updates**: Pull-to-refresh support.
 - **Read Status**: Tracks read articles and dims them.
 - **All Feeds**: View articles from all feeds in a unified timeline.
@@ -16,8 +18,9 @@ Reazy (Read + Lazy) is a modern, terminal-based RSS/Atom reader built with Go an
 - **News Tab (AI Digest)**: Build daily AI digest topics from today's articles and keep digest history grouped by date. Refreshing News appends new topics without deleting older ones from the same day.
 - **SQLite History Store**: Read state/bookmarks/AI metadata are persisted in SQLite for faster startup and updates.
 - **AI Summary View**: In the detail screen, AI summary and article body are clearly separated for easier reading.
+- **Context-Aware Loading Messages**: Loading text now matches the current screen (feed/news/article) for clearer progress feedback.
 - **AI Insights (Optional)**: Generate article summaries and tags via Codex CLI.
-- **Status Footer**: AI generation status and feed timeout/failure notices are shown in the footer.
+- **Status Footer**: AI generation status, timeout/failure notices, and contextual shortcut hints are shown in the footer.
 
 ## Installation
 
@@ -46,6 +49,11 @@ In the feed sidebar, select `* News` to open AI digest history grouped by date.
 Today's digest is generated from your registered feeds and cached for the day.  
 Manual refresh in `News` regenerates today's digest and keeps previous topics for that date.  
 In normal feed views (`All Feeds` / `Bookmarks` / each feed), articles are grouped by date sections.
+If `feed_groups` is configured, feeds are shown under group headers in the sidebar.
+Press `z` or `s` in feed view to generate and apply AI-based feed groups.
+When groups are shown, each header has a group number (`[1]`, `[2]`, ...). Press `1-9` (`0` for the 10th group) to jump to that section.
+In article view, `1-9` / `0` jumps by date section.
+Press `J` / `K` to jump to the next / previous section (group in feed view, date section in article view).
 If some feeds are slow, Reazy shows available results first and reports timeout count in the footer.
 
 ### Keybindings (Default)
@@ -57,9 +65,12 @@ If some feeds are slow, Reazy shows available results first and reports timeout 
 - **Actions**:
   - `a`: Add Feed
   - `x`: Delete Feed
+  - `z`: AI group feeds (feed view)
+  - `1-9` / `0`: Jump section (`0` = 10th; group in feed view, date section in article view)
+  - `J` / `K`: Next / previous section (group/date section)
   - `r`: Refresh current feed (`News` regenerates today's digest and keeps previous topics for the date)
   - `b`: Toggle Bookmark
-  - `s`: Generate AI Summary/Tags (article/detail)
+  - `s`: AI group feeds (feed view) / Generate AI Summary/Tags (article/detail)
   - `S`: Toggle AI Summary visibility (detail view)
   - `?`: Toggle Help
   - `q`: Quit
@@ -71,12 +82,17 @@ If you still have a `.jsonl` path, Reazy automatically uses `history.db` in the 
 
 Example:
 ```yaml
+feed_groups:
+  - name: Tech
+    feeds:
+      - https://news.ycombinator.com/rss
+      - https://github.com/golang/go/releases.atom
 feeds:
-  - https://news.ycombinator.com/rss
-  - https://github.com/golang/go/releases.atom
+  - https://planetpython.org/rss20.xml
 keymap:
   up: k
   down: j
+  group_feeds: z
   ...
 history_file: /Users/you/.local/share/reazy/history.db
 codex:

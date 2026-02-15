@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/tesso57/reazy/internal/domain/subscription"
 )
 
 func TestLoad_Defaults(t *testing.T) {
@@ -34,6 +36,9 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if store.Settings.KeyMap.ToggleSummary != "S" {
 		t.Errorf("Expected default KeyMap.ToggleSummary 'S', got %q", store.Settings.KeyMap.ToggleSummary)
+	}
+	if store.Settings.KeyMap.GroupFeeds != "z" {
+		t.Errorf("Expected default KeyMap.GroupFeeds 'z', got %q", store.Settings.KeyMap.GroupFeeds)
 	}
 	if store.Settings.Codex.Command != "codex" {
 		t.Errorf("Expected default Codex.Command 'codex', got %q", store.Settings.Codex.Command)
@@ -181,5 +186,145 @@ func TestLoad_NormalizesFeeds(t *testing.T) {
 		if got != want[i] {
 			t.Fatalf("Expected feed %d to be %q, got %q", i, want[i], got)
 		}
+	}
+}
+
+func TestLoad_FeedGroups(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	content := `feed_groups:
+  - name: Tech
+    feeds:
+      - " https://example.com/tech.xml "
+      - |
+          https://example.com/go.xml
+          https://example.com/rust.xml
+feeds:
+  - https://example.com/misc.xml
+`
+	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	store, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if len(store.Settings.FeedGroups) != 1 {
+		t.Fatalf("len(feed_groups) = %d, want 1", len(store.Settings.FeedGroups))
+	}
+	group := store.Settings.FeedGroups[0]
+	if group.Name != "Tech" {
+		t.Fatalf("group.Name = %q, want Tech", group.Name)
+	}
+	if len(group.Feeds) != 3 {
+		t.Fatalf("len(group.Feeds) = %d, want 3", len(group.Feeds))
+	}
+
+	listed, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	want := []string{
+		"https://example.com/tech.xml",
+		"https://example.com/go.xml",
+		"https://example.com/rust.xml",
+		"https://example.com/misc.xml",
+	}
+	if len(listed) != len(want) {
+		t.Fatalf("len(listed) = %d, want %d", len(listed), len(want))
+	}
+	for i, got := range listed {
+		if got != want[i] {
+			t.Fatalf("listed[%d] = %q, want %q", i, got, want[i])
+		}
+	}
+}
+
+func TestStore_Remove_GroupedFeedByFlattenedIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	content := `feed_groups:
+  - name: GroupA
+    feeds:
+      - https://example.com/a.xml
+      - https://example.com/b.xml
+feeds:
+  - https://example.com/c.xml
+`
+	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	store, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if err := store.Remove(1); err != nil {
+		t.Fatalf("Remove failed: %v", err)
+	}
+
+	if len(store.Settings.FeedGroups) != 1 {
+		t.Fatalf("len(feed_groups) = %d, want 1", len(store.Settings.FeedGroups))
+	}
+	group := store.Settings.FeedGroups[0]
+	if len(group.Feeds) != 1 || group.Feeds[0] != "https://example.com/a.xml" {
+		t.Fatalf("group feeds after remove = %#v", group.Feeds)
+	}
+
+	listed, err := store.List()
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	want := []string{
+		"https://example.com/a.xml",
+		"https://example.com/c.xml",
+	}
+	if len(listed) != len(want) {
+		t.Fatalf("len(listed) = %d, want %d", len(listed), len(want))
+	}
+	for i, got := range listed {
+		if got != want[i] {
+			t.Fatalf("listed[%d] = %q, want %q", i, got, want[i])
+		}
+	}
+}
+
+func TestStore_ReplaceFeedGroups(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	store, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	err = store.ReplaceFeedGroups([]subscription.FeedGroup{
+		{
+			Name:  "Tech",
+			Feeds: []string{" https://example.com/tech.xml ", "https://example.com/go.xml"},
+		},
+	}, []string{" https://example.com/misc.xml "})
+	if err != nil {
+		t.Fatalf("ReplaceFeedGroups failed: %v", err)
+	}
+
+	if len(store.Settings.FeedGroups) != 1 {
+		t.Fatalf("len(feed_groups) = %d, want 1", len(store.Settings.FeedGroups))
+	}
+	if store.Settings.FeedGroups[0].Name != "Tech" {
+		t.Fatalf("group name = %q, want Tech", store.Settings.FeedGroups[0].Name)
+	}
+	if len(store.Settings.Feeds) != 1 || store.Settings.Feeds[0] != "https://example.com/misc.xml" {
+		t.Fatalf("ungrouped feeds = %#v, want [misc]", store.Settings.Feeds)
+	}
+
+	reloaded, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Reload failed: %v", err)
+	}
+	if len(reloaded.Settings.FeedGroups) != 1 || len(reloaded.Settings.FeedGroups[0].Feeds) != 2 {
+		t.Fatalf("reloaded groups = %#v", reloaded.Settings.FeedGroups)
 	}
 }
